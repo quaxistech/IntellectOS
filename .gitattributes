@@ -1,0 +1,9 @@
+# Stable text file line endings across editors and development hosts.
+* text=auto
+*.c text eol=lf
+*.h text eol=lf
+*.S text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+Makefile text eol=lf

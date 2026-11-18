@@ -1,0 +1,14 @@
+# All generated firmware, kernels, disk images, objects and QEMU vars live here.
+/build/
+
+# Python test/cache files.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Editor/temporary files; shared VS Code tasks remain versioned.
+.vscode/settings.local.json
+*.swp
+*.swo
+*~
+.DS_Store

@@ -1,0 +1,24 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "IntellectOS: build and test all",
+      "type": "shell",
+      "command": "make clean && make check",
+      "group": {"kind": "build", "isDefault": true},
+      "problemMatcher": []
+    },
+    {
+      "label": "IntellectOS: UEFI Stage E in QEMU",
+      "type": "shell",
+      "command": "make uefi-e-run",
+      "problemMatcher": []
+    },
+    {
+      "label": "IntellectOS: BIOS 0.4 in QEMU",
+      "type": "shell",
+      "command": "make run",
+      "problemMatcher": []
+    }
+  ]
+}
