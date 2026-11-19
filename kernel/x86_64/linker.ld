@@ -7,5 +7,7 @@ SECTIONS
   .rodata : { *(.rodata .rodata.*) }
   .data : { *(.data .data.*) }
   .bss (NOLOAD) : { *(.bss .bss.*) *(COMMON) }
+  __kernel_image_end = .;
+  ASSERT(__kernel_image_end <= 0x80000, "kernel runtime exceeds 128 reserved pages")
   /DISCARD/ : { *(.eh_frame*) *(.note*) *(.comment*) *(.llvm_addrsig*) }
 }

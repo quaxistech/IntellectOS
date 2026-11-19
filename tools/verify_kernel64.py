@@ -12,14 +12,24 @@ import sys
 def verify(elf: pathlib.Path, binary: pathlib.Path):
     result = subprocess.run(['readelf', '-h', '-S', '-r', '-s', str(elf)],
                             check=True, capture_output=True, text=True).stdout
+    # A zero-byte linker-synthesized .got is harmless; actual GOT content is not.
+    sections = subprocess.run(['readelf', '-W', '-S', str(elf)],
+                              check=True, capture_output=True, text=True).stdout
+    import re
+    got_nonzero = False
+    for line in sections.splitlines():
+        match = re.match(r'^\s*\[\s*\d+\]\s+(\.got(?:\.\S+)?)\s+\S+\s+'
+                         r'[0-9a-fA-F]+\s+[0-9a-fA-F]+\s+([0-9a-fA-F]+)\b', line)
+        if match and int(match.group(2), 16) != 0:
+            got_nonzero = True
     conditions = {
         '64-bit ELF': 'Class:                             ELF64' in result,
         'x86-64 machine': 'Advanced Micro Devices X86-64' in result,
         'entry at 0': 'Entry point address:               0x0' in result,
         'entry symbol': 'intellect64_entry' in result,
         'no relocations': 'There are no relocations in this file.' in result,
-        'no GOT or dynamic loader': all(x not in result for x in
-            ('.got ', '.plt ', '.dynamic ', '.interp ', '.rela.')),
+        'no GOT or dynamic loader': (not got_nonzero and all(x not in result for x in
+            ('.plt ', '.dynamic ', '.interp ', '.rela.'))),
         'bounded image': 128 <= binary.stat().st_size <= 32 * 4096,
         'not an ELF header': not binary.read_bytes().startswith(b'\x7fELF'),
     }

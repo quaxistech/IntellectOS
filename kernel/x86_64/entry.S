@@ -8,6 +8,9 @@
 intellect64_entry:
     cli
     mov %rsi, %cr3
+    /* Preserve original Stage E RSP and RAX for four-argument C entry. */
+    mov %rsp, %rdx
+    mov %rax, %rcx
     xor %rbp, %rbp
     call intellect64_main
 1:  cli

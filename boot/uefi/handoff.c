@@ -5,15 +5,16 @@
 #include "handoff.h"
 #include "kernel_embed.h"
 #include "framebuffer_console.h"
+#include "../../kernel/include/memcore64.h"
 
 #define EFI_ALLOCATE_ANY 0u
 #define EFI_ALLOCATE_MAX 1u
 #define EFI_LOADER_CODE 1u
 #define EFI_LOADER_DATA 2u
 #define PAGE_SIZE 4096u
-#define KERNEL_PAGES 32u
-#define STACK_PAGES 16u
-#define TABLE_PAGES 8u
+#define KERNEL_PAGES INTELLECT_KERNEL64_PAGES
+#define STACK_PAGES INTELLECT_STACK64_PAGES
+#define TABLE_PAGES INTELLECT_TABLE64_PAGES
 #define PAGE_PRESENT_RW UINT64_C(3)
 #define PAGE_2M UINT64_C(0x83)
 #define PAGE_MMIO_UNCACHED UINT64_C(0x18) /* PWT | PCD for framebuffer */

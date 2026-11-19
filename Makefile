@@ -77,7 +77,7 @@ UEFI_EFI := $(BUILD)/uefi/BOOTX64.EFI
 .PHONY: uefi-image uefi-check uefi-run uefi-e-check uefi-e-run
 $(BUILD)/uefi:
 	mkdir -p $@
-$(BUILD)/uefi/%.obj: boot/uefi/%.c boot/uefi/efi_min.h boot/uefi/firmware_info.h boot/uefi/platform_probe.h boot/uefi/bootinfo_builder.h boot/uefi/handoff.h boot/uefi/framebuffer_console.h kernel/src64/font5x7.h kernel/include/bootinfo.h | $(BUILD)/uefi
+$(BUILD)/uefi/%.obj: boot/uefi/%.c boot/uefi/efi_min.h boot/uefi/firmware_info.h boot/uefi/platform_probe.h boot/uefi/bootinfo_builder.h boot/uefi/handoff.h boot/uefi/framebuffer_console.h kernel/src64/font5x7.h kernel/include/bootinfo.h kernel/include/memcore64.h | $(BUILD)/uefi
 	$(UEFI_CC) --target=x86_64-pc-win32-coff -std=c11 -ffreestanding -fshort-wchar \
 	  -fno-stack-protector -fno-builtin -mno-red-zone -O2 -Wall -Wextra -Werror \
 	  -c $< -o $@
@@ -86,17 +86,22 @@ K64_CC := clang
 K64_LD := ld.lld
 K64_OBJCOPY := llvm-objcopy
 K64_FLAGS := --target=x86_64-unknown-none-elf -std=c11 -ffreestanding -fpie \
-              -fno-stack-protector -fno-builtin -mno-red-zone -mcmodel=small \
+              -fno-stack-protector -fno-builtin -mno-red-zone -mgeneral-regs-only -mcmodel=small \
               -O2 -Wall -Wextra -Werror -fno-asynchronous-unwind-tables \
               -fno-unwind-tables -Ikernel/include
 $(BUILD)/kernel64:
 	mkdir -p $@
 $(BUILD)/kernel64/entry.o: kernel/x86_64/entry.S | $(BUILD)/kernel64
 	$(K64_CC) --target=x86_64-unknown-none-elf -c $< -o $@
-$(BUILD)/kernel64/kernel.o: kernel/src64/kernel.c kernel/src64/font5x7.h kernel/include/bootinfo.h | $(BUILD)/kernel64
+$(BUILD)/kernel64/kernel.o: kernel/src64/kernel.c kernel/src64/font5x7.h kernel/include/bootinfo.h kernel/include/pmm64.h kernel/include/memcore64.h | $(BUILD)/kernel64
 	$(K64_CC) $(K64_FLAGS) -c $< -o $@
-$(BUILD)/kernel64.elf: $(BUILD)/kernel64/entry.o $(BUILD)/kernel64/kernel.o kernel/x86_64/linker.ld
-	$(K64_LD) -m elf_x86_64 -nostdlib --build-id=none -T kernel/x86_64/linker.ld -o $@ $(BUILD)/kernel64/entry.o $(BUILD)/kernel64/kernel.o
+MEMCORE64_OBJS := $(addprefix $(BUILD)/kernel64/,$(addsuffix .o,pmm64 memcore64 exceptions64 vmm64))
+$(BUILD)/kernel64/%.o: kernel/src64/%.c kernel/include/bootinfo.h kernel/include/pmm64.h kernel/include/memcore64.h | $(BUILD)/kernel64
+	$(K64_CC) $(K64_FLAGS) -c $< -o $@
+$(BUILD)/kernel64/exceptions_asm.o: kernel/x86_64/exceptions64.S | $(BUILD)/kernel64
+	$(K64_CC) --target=x86_64-unknown-none-elf -c $< -o $@
+$(BUILD)/kernel64.elf: $(BUILD)/kernel64/entry.o $(BUILD)/kernel64/kernel.o $(MEMCORE64_OBJS) $(BUILD)/kernel64/exceptions_asm.o kernel/x86_64/linker.ld
+	$(K64_LD) -m elf_x86_64 -nostdlib --build-id=none -T kernel/x86_64/linker.ld -o $@ $(BUILD)/kernel64/entry.o $(BUILD)/kernel64/kernel.o $(MEMCORE64_OBJS) $(BUILD)/kernel64/exceptions_asm.o
 $(BUILD)/kernel64.bin: $(BUILD)/kernel64.elf
 	$(K64_OBJCOPY) -O binary $< $@
 	$(PYTHON) tools/verify_kernel64.py $(BUILD)/kernel64.elf $@

@@ -32,7 +32,7 @@ tools/           Read-only validation and deterministic image construction
 tests/           Host ABI, firmware fixtures, and image tests
 docs/            Architecture, BootInfo ABI, tests, milestones, roadmap
 .vscode/         Editor task definitions
-.github/         CI workflow for build and host checks
+# No GitHub Actions workflows; tests run locally
 ```
 
 ## Build on Ubuntu 24.04
@@ -94,3 +94,20 @@ For the implementation details and limitations, see [Architecture](docs/ARCHITEC
 ## Publication and license
 
 This repository is publicly readable. **No license has been granted** at this stage; all rights are reserved by the respective copyright holders unless and until a license file is added. Do not add third-party code or sample firmware blobs without verifying their redistribution terms.
+
+## Experimental Memory Core patch (not yet hardware-verified)
+
+The proposed foundation adds a fail-closed low-4-GiB physical-page allocator,
+IDT/GDT/TSS exception diagnostics and a 512-KiB runtime ELF linker bound.
+See [Memory Core Foundation](docs/MEMORY_CORE_FOUNDATION.md) for ownership
+assumptions and the QEMU/Lenovo acceptance sequence. The historical 23-test
+Stage E checkpoint above remains a **prior** observation, not a validation of
+these new changes. No BIOS implementation or BootInfo v1 layout is changed.
+
+## Experimental Memory Core M1 (QEMU validation pending)
+
+This stage fixes the Stage E native-entry register handoff and adds an
+NX-enforced supervisor-only high-half scratch VMM window with 4-KiB mappings.
+It does not yet implement global W^X, guard pages for the kernel stack,
+full kernel virtual-memory isolation, or a kernel heap. See
+[Memory Core M1](docs/MEMORY_CORE_M1.md).
