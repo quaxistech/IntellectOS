@@ -97,12 +97,18 @@ $(BUILD)/kernel64/kernel.o: kernel/src64/kernel.c kernel/src64/font5x7.h kernel/
 	$(K64_CC) $(K64_FLAGS) -c $< -o $@
 MEMCORE64_OBJS := $(addprefix $(BUILD)/kernel64/,$(addsuffix .o,pmm64 memcore64 exceptions64 vmm64 kheap64))
 CONSOLE64_OBJS := $(BUILD)/kernel64/serial64.o $(BUILD)/kernel64/kmonitor64.o
+M3A_OBJS := $(BUILD)/kernel64/m3policy64.o $(BUILD)/kernel64/m3protect64.o
+H1H2_OBJS := $(BUILD)/kernel64/hardware64.o $(BUILD)/kernel64/driver64.o $(BUILD)/kernel64/hwdiag64.o
+S0_OBJS := $(BUILD)/kernel64/ata_pio64.o $(BUILD)/kernel64/block64.o $(BUILD)/kernel64/partition64.o $(BUILD)/kernel64/diskdiag64.o
+WELCOME64_OBJS := $(BUILD)/kernel64/welcome64.o
+I2_OBJS := $(BUILD)/kernel64/fat32_vfs64.o
+U1_OBJS := $(addprefix $(BUILD)/kernel64/,$(addsuffix .o,userterminal64 userpolicy64 terminalfb64 input64)) $(BUILD)/kernel64/usergate64.o $(BUILD)/kernel64/user_terminal_embed.o
 $(BUILD)/kernel64/%.o: kernel/src64/%.c kernel/include/bootinfo.h kernel/include/pmm64.h kernel/include/memcore64.h kernel/include/kheap64.h kernel/include/vmm64.h | $(BUILD)/kernel64
 	$(K64_CC) $(K64_FLAGS) -c $< -o $@
 $(BUILD)/kernel64/exceptions_asm.o: kernel/x86_64/exceptions64.S | $(BUILD)/kernel64
 	$(K64_CC) --target=x86_64-unknown-none-elf -c $< -o $@
-$(BUILD)/kernel64.elf: $(BUILD)/kernel64/entry.o $(BUILD)/kernel64/kernel.o $(MEMCORE64_OBJS) $(BUILD)/kernel64/exceptions_asm.o kernel/x86_64/linker.ld $(CONSOLE64_OBJS)
-	$(K64_LD) -m elf_x86_64 -nostdlib --build-id=none -T kernel/x86_64/linker.ld -o $@ $(BUILD)/kernel64/entry.o $(BUILD)/kernel64/kernel.o $(MEMCORE64_OBJS) $(BUILD)/kernel64/exceptions_asm.o $(CONSOLE64_OBJS)
+$(BUILD)/kernel64.elf: $(BUILD)/kernel64/entry.o $(BUILD)/kernel64/kernel.o $(MEMCORE64_OBJS) $(BUILD)/kernel64/exceptions_asm.o kernel/x86_64/linker.ld $(CONSOLE64_OBJS) $(M3A_OBJS) $(H1H2_OBJS) $(S0_OBJS) $(WELCOME64_OBJS) $(U1_OBJS) $(I2_OBJS)
+	$(K64_LD) -m elf_x86_64 -nostdlib --build-id=none -T kernel/x86_64/linker.ld -o $@ $(BUILD)/kernel64/entry.o $(BUILD)/kernel64/kernel.o $(MEMCORE64_OBJS) $(BUILD)/kernel64/exceptions_asm.o $(CONSOLE64_OBJS) $(M3A_OBJS) $(H1H2_OBJS) $(S0_OBJS) $(WELCOME64_OBJS) $(U1_OBJS) $(I2_OBJS)
 $(BUILD)/kernel64.bin: $(BUILD)/kernel64.elf
 	$(K64_OBJCOPY) -O binary $< $@
 	$(PYTHON) tools/verify_kernel64.py $(BUILD)/kernel64.elf $@
@@ -110,7 +116,8 @@ $(BUILD)/uefi/kernel_embed.obj: boot/uefi/kernel_embed.S $(BUILD)/kernel64.bin |
 	$(UEFI_CC) --target=x86_64-pc-win32-coff -c $< -o $@
 $(BUILD)/uefi/handoff_asm.obj: boot/uefi/handoff.S | $(BUILD)/uefi
 	$(UEFI_CC) --target=x86_64-pc-win32-coff -c $< -o $@
-$(UEFI_EFI): $(BUILD)/uefi/start.obj $(BUILD)/uefi/firmware_info.obj $(BUILD)/uefi/platform_probe.obj $(BUILD)/uefi/bootinfo_builder.obj $(BUILD)/uefi/framebuffer_console.obj $(BUILD)/uefi/handoff.obj $(BUILD)/uefi/handoff_asm.obj $(BUILD)/uefi/kernel_embed.obj
+BOOTMENU_EFI_OBJS := $(BUILD)/uefi/bootmenu.obj $(BUILD)/uefi/firmware_storage.obj
+$(UEFI_EFI): $(BOOTMENU_EFI_OBJS) $(BUILD)/uefi/start.obj $(BUILD)/uefi/firmware_info.obj $(BUILD)/uefi/platform_probe.obj $(BUILD)/uefi/bootinfo_builder.obj $(BUILD)/uefi/framebuffer_console.obj $(BUILD)/uefi/handoff.obj $(BUILD)/uefi/handoff_asm.obj $(BUILD)/uefi/kernel_embed.obj
 	$(UEFI_LD) /machine:x64 /subsystem:efi_application /entry:efi_main /nodefaultlib \
 	  /dll /timestamp:0 /out:$@ $^
 $(UEFI_IMG): $(BUILD)/intellectos-bios.img $(UEFI_EFI) tools/add_uefi_fat16.py
@@ -145,3 +152,63 @@ uefi-console: uefi-check
 	@bash tools/run_uefi_console.sh
 uefi-console-gui: uefi-check
 	@bash tools/run_uefi_console.sh --gui
+
+.PHONY: uefi-m3-smoke
+uefi-m3-smoke: uefi-check
+	@python3 tools/m3a_qemu_smoke.py
+
+.PHONY: uefi-hw-smoke
+uefi-hw-smoke: uefi-check
+	@python3 tools/h1_h2_qemu_smoke.py
+
+.PHONY: uefi-s0-smoke
+uefi-s0-smoke: uefi-check
+	@python3 tools/s0_qemu_smoke.py
+
+# L1: build a physically flashable UEFI image. Nothing writes to a device.
+.PHONY: uefi-live-image
+uefi-live-image: uefi-check
+	cp $(UEFI_IMG) $(BUILD)/intellectos-live-usb.img
+	@echo "READY: $(BUILD)/intellectos-live-usb.img (USB test image, not installer)"
+
+.PHONY: uefi-live-smoke
+uefi-live-smoke: uefi-check
+	@python3 tools/l1_qemu_smoke.py
+$(BUILD)/kernel64/welcome64.o: kernel/include/welcome64.h kernel/src64/font5x7.h
+$(BUILD)/kernel64/kernel.o: kernel/include/welcome64.h
+
+# B1: independent UEFI boot menu. The USB image remains read-only on host.
+$(BUILD)/uefi/start.obj: boot/uefi/bootmenu.h boot/uefi/firmware_storage.h
+$(BUILD)/uefi/bootmenu.obj: boot/uefi/bootmenu.h kernel/src64/font5x7.h
+$(BUILD)/uefi/firmware_storage.obj: boot/uefi/firmware_storage.h
+.PHONY: uefi-b1-smoke
+uefi-b1-smoke: uefi-check
+	@python3 tools/l1_qemu_smoke.py
+
+# U1: real ring3 static user terminal, no filesystem or Vibelang compiler yet.
+$(BUILD)/user:
+	mkdir -p $@
+U1_USER_FLAGS := --target=x86_64-unknown-none-elf -std=c11 -ffreestanding -fpie \
+                 -fno-stack-protector -fno-builtin -mno-red-zone -mgeneral-regs-only \
+                 -mcmodel=small -fno-jump-tables -O2 -Wall -Wextra -Werror \
+                 -fno-asynchronous-unwind-tables -fno-unwind-tables
+$(BUILD)/user/terminal.o: user/terminal.c | $(BUILD)/user
+	$(K64_CC) $(U1_USER_FLAGS) -c $< -o $@
+$(BUILD)/user/entry.o: user/entry.S | $(BUILD)/user
+	$(K64_CC) --target=x86_64-unknown-none-elf -c $< -o $@
+$(BUILD)/user/terminal.elf: $(BUILD)/user/entry.o $(BUILD)/user/terminal.o user/terminal.ld
+	$(K64_LD) -m elf_x86_64 -nostdlib --build-id=none -T user/terminal.ld -o $@ $(BUILD)/user/entry.o $(BUILD)/user/terminal.o
+$(BUILD)/user/terminal.bin: $(BUILD)/user/terminal.elf tools/verify_user_terminal.py
+	$(K64_OBJCOPY) -O binary $< $@
+	$(PYTHON) tools/verify_user_terminal.py $(BUILD)/user/terminal.elf $@
+$(BUILD)/kernel64/usergate64.o: kernel/x86_64/usergate64.S | $(BUILD)/kernel64
+	$(K64_CC) --target=x86_64-unknown-none-elf -c $< -o $@
+$(BUILD)/kernel64/user_terminal_embed.o: kernel/x86_64/user_terminal_embed.S $(BUILD)/user/terminal.bin | $(BUILD)/kernel64
+	$(K64_CC) --target=x86_64-unknown-none-elf -c $< -o $@
+$(BUILD)/kernel64/kernel.o: kernel/include/userterminal64.h
+.PHONY: uefi-u1-smoke
+uefi-u1-smoke: uefi-check
+	@$(PYTHON) tools/u1_qemu_smoke.py
+
+# I2: native read-only GPT/FAT32 backend (does not mount IntellectFS).
+$(BUILD)/kernel64/kernel.o: kernel/include/fat32_vfs64.h

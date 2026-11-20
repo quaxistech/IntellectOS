@@ -13,7 +13,9 @@ class TestConsole64(unittest.TestCase):
             output = Path(tmp) / 'console64-host'
             subprocess.run([
                 'gcc', '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror',
-                '-Ikernel/include', 'kernel/src64/kmonitor64.c',
+                '-DINTELLECT_HW64_HOST_TEST', '-DINTELLECT_BLOCK64_HOST_TEST', '-Ikernel/include', 'kernel/src64/kmonitor64.c', 'kernel/src64/hardware64.c', 'kernel/src64/driver64.c', 'kernel/src64/hwdiag64.c', 'kernel/src64/ata_pio64.c',
+                    'kernel/src64/block64.c', 'kernel/src64/partition64.c',
+                    'kernel/src64/diskdiag64.c',
                 'tests/console64_host.c', '-o', str(output)
             ], cwd=ROOT, capture_output=True, text=True, check=True)
             p = subprocess.run([str(output)], cwd=ROOT, capture_output=True,

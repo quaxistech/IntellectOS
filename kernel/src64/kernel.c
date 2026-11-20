@@ -11,6 +11,39 @@
 #include "../include/kmonitor64.h"
 #include "../include/serial64.h"
 #include "../include/kheap64.h"
+#include "../include/m3protect64.h"
+#include "../include/hardware64.h"
+#include "../include/driver64.h"
+#include "../include/block64.h"
+
+#include "../include/fat32_vfs64.h"
+
+/* I2: GPT + FAT32 ESP, read-only; fails closed on non-GPT USB image. */
+static int intellect_i2_block_sector(void *ctx,uint64_t lba,uint8_t out[512]) {
+    (void)ctx;
+    return intellect_block64_read(lba,out);
+}
+static void intellect_i2_probe_vfs(void) {
+    const intellect_block64_info_t *info=intellect_block64_info();
+    if(!info || !info->ready || info->sector_bytes!=512u)return;
+    intellect_fat32_mount_t mount;
+    if(intellect_fat32_mount_gpt(&mount,intellect_i2_block_sector,NULL,info->sectors)) {
+        intellect_fat32_file_t file;
+        uint8_t head[2]={0,0};size_t got=0;
+        int ok=intellect_fat32_open(&mount,"/EFI/BOOT/BOOTX64.EFI",&file) &&
+               !file.is_dir &&
+               intellect_fat32_read(&mount,&file,0u,head,2u,&got) &&
+               got==2u && head[0]=='M' && head[1]=='Z';
+        const char *msg=ok ? "I2 VFS: GPT FAT32 ESP READ VERIFIED\n" :
+                             "I2 VFS: ESP MOUNTED, EFI FILE UNREADABLE\n";
+        while(*msg)intellect_serial64_putc(*msg++);
+    } else {
+        const char *msg="I2 VFS: NO VALID GPT/FAT32 ESP (legacy live image allowed)\n";
+        while(*msg)intellect_serial64_putc(*msg++);
+    }
+}
+#include "../include/welcome64.h"
+#include "../include/userterminal64.h"
 
 #include "font5x7.h"
 
@@ -22,6 +55,8 @@ typedef struct {
 } console_t;
 
 static console_t *active_console;
+/* GUI output is reserved for the live splash and fatal faults. */
+static uint8_t visual_diagnostics_enabled;
 static volatile uint32_t fault_report_busy;
 
 static void pixel(console_t *c, uint32_t x, uint32_t y, uint32_t rgb) {
@@ -38,8 +73,13 @@ static void clear_screen(console_t *c) {
       for(uint32_t x=0; x<c->width; ++x) pixel(c,x,y,c->background);
     c->col=0;c->row=0;
 }
+static void enable_fatal_visual(console_t *c) {
+    visual_diagnostics_enabled=1u;
+    clear_screen(c);
+}
 static void put_char(console_t *c,char ch) {
     if (c==active_console) intellect_serial64_putc(ch);
+    if (!visual_diagnostics_enabled) return;
     if(ch=='\r') return;
     if(ch=='\n') {c->col=0;if(c->row+1<c->rows)++c->row;return;}
     if(c->col>=c->columns) {c->col=0;if(c->row+1<c->rows)++c->row;}
@@ -82,6 +122,7 @@ __attribute__((noreturn)) void intellect64_fault_report(uint64_t vector,
         for (;;) __asm__ volatile("hlt");
     fault_report_busy = 1u;
     console_t *c = active_console;
+    enable_fatal_visual(c);
     c->foreground = 0xFF8D8Du;
     print(c,"\nEXCEPTION VECTOR ");decimal(c,vector);
     print(c," ERROR ");hex(c,error);
@@ -119,7 +160,7 @@ __attribute__((noreturn)) void intellect64_main(const intellect_bootinfo_t *boot
     c.columns=(c.width>32u)?(c.width-32u)/12u:0u;
     c.rows=(c.height>32u)?(c.height-32u)/16u:0u;
     if(c.columns<36u || c.rows<16u)for(;;)__asm__ volatile("cli; hlt");
-    clear_screen(&c);
+    /* Keep the UEFI boot background visible until the single L1 splash. */
     active_console=&c;
     (void)intellect_serial64_init(); /* enable COM1 diagnostics before M1 */
     c.foreground=0x71E4BBu;
@@ -142,6 +183,7 @@ __attribute__((noreturn)) void intellect64_main(const intellect_bootinfo_t *boot
     print(&c,"SMBIOS: ");hex(&c,boot->smbios_addr);put_char(&c,'\n');
     print(&c,"-----------------------------------\n");
     if (!intellect64_memory_core_start(boot,bootstrap_cr3,stack_top,kernel_base)) {
+        enable_fatal_visual(&c);
         c.foreground=0xFF8D8Du;
         print(&c,"MEMORY CORE: NOT READY / CPU HALTED\n");
         for(;;)__asm__ volatile("cli; hlt");
@@ -152,6 +194,7 @@ __attribute__((noreturn)) void intellect64_main(const intellect_bootinfo_t *boot
     print(&c,"PMM FREE PAGES: ");decimal(&c,stats.free_pages);put_char(&c,'\n');
     uint64_t trial=intellect_pmm_alloc_page();
     if (!trial || !intellect_pmm_free_page(trial)) {
+        enable_fatal_visual(&c);
         c.foreground=0xFF8D8Du;
         print(&c,"PMM ALLOC/FREE SELF-TEST FAILED\n");
         for(;;)__asm__ volatile("cli; hlt");
@@ -159,6 +202,7 @@ __attribute__((noreturn)) void intellect64_main(const intellect_bootinfo_t *boot
     print(&c,"PMM ALLOC/FREE: PASS\n");
     print(&c,"M1 CHECKPOINT: VMM INIT BEGIN\n");
     if (!intellect_vmm64_init(bootstrap_cr3)) {
+        enable_fatal_visual(&c);
         c.foreground=0xFF8D8Du;
         print(&c,"VMM INIT FAILED / CPU HALTED\n");
         for(;;)__asm__ volatile("cli; hlt");
@@ -166,6 +210,7 @@ __attribute__((noreturn)) void intellect64_main(const intellect_bootinfo_t *boot
     print(&c,"M1 CHECKPOINT: VMM INIT READY\n");
     print(&c,"M1 CHECKPOINT: VMM SELFTEST BEGIN\n");
     if (!intellect_vmm64_self_test()) {
+        enable_fatal_visual(&c);
         c.foreground=0xFF8D8Du;
         print(&c,"VMM SCRATCH WINDOW: FAILED / CPU HALTED\n");
         for(;;)__asm__ volatile("cli; hlt");
@@ -174,23 +219,85 @@ __attribute__((noreturn)) void intellect64_main(const intellect_bootinfo_t *boot
     print(&c,"VMM HIGH-HALF RW/NX: PASS\n");
     print(&c,"M2 CHECKPOINT: KHEAP INIT BEGIN\n");
     if (!intellect_kheap64_init()) {
+        enable_fatal_visual(&c);
         c.foreground=0xFF8D8Du;
         print(&c,"KHEAP INIT FAILED / CPU HALTED\n");
         for (;;) __asm__ volatile("cli; hlt");
     }
     print(&c,"M2 CHECKPOINT: KHEAP READY\n");
     if (!intellect_kheap64_self_test()) {
+        enable_fatal_visual(&c);
         c.foreground=0xFF8D8Du;
         print(&c,"KHEAP SELFTEST FAILED / CPU HALTED\n");
         for (;;) __asm__ volatile("cli; hlt");
     }
     print(&c,"KHEAP SLAB/PAGE-RUN: PASS\n");
+    print(&c,"M3-A CHECKPOINT: IDENTITY PROTECTION BEGIN\n");
+    if (!intellect_m3_protect64_init(bootstrap_cr3,kernel_base,stack_top)) {
+        enable_fatal_visual(&c);
+        c.foreground=0xFF8D8Du;
+        print(&c,"M3-A IDENTITY PROTECTION INIT FAILED / CPU HALTED\n");
+        for (;;) __asm__ volatile("cli; hlt");
+    }
+    if (!intellect_m3_protect64_self_test()) {
+        enable_fatal_visual(&c);
+        c.foreground=0xFF8D8Du;
+        print(&c,"M3-A IDENTITY PROTECTION SELFTEST FAILED / CPU HALTED\n");
+        for (;;) __asm__ volatile("cli; hlt");
+    }
+    print(&c,"M3-A IDENTITY W^X/NX: PASS\n");
+    print(&c,"H1 CHECKPOINT: HARDWARE PROBE BEGIN\n");
+    if (!intellect_hw64_init(boot)) {
+        enable_fatal_visual(&c);
+        c.foreground=0xFF8D8Du;
+        print(&c,"H1 INVENTORY INIT FAILED / CPU HALTED\n");
+        for (;;) __asm__ volatile("cli; hlt");
+    }
+    print(&c,"H1/H2 HARDWARE INVENTORY: READY\n");
+    if (!intellect_driver64_init(intellect_hw64_snapshot())) {
+        enable_fatal_visual(&c);
+        c.foreground=0xFF8D8Du;
+        print(&c,"H2 DRIVER REGISTRY INIT FAILED / CPU HALTED\n");
+        for (;;) __asm__ volatile("cli; hlt");
+    }
+    print(&c,"H1/H2 DRIVER REGISTRY: READY\n");
+    print(&c,"S0 CHECKPOINT: READONLY ATA PROBE BEGIN\n");
+    if (intellect_block64_init(intellect_hw64_snapshot()))
+        print(&c,"S0 BLOCK READONLY: READY\n");
+    else print(&c,"S0 BLOCK READONLY: UNAVAILABLE\n");
     c.foreground=0x71E4BBu;
     print(&c,"NATIVE KERNEL RUNNING - CONSOLE C1\n");
     c.foreground=0xF2F5FDu;
     print(&c,"NO GRUB / NO LINUX / NO DISK WRITES\n");
     print(&c,"CONSOLE C1: COM1 SERIAL - SEE QEMU TERMINAL\n");
+    /* L1 native welcome stays visible after the serial monitor begins.
+     * This does not initialize any controller or call firmware services.
+     */
+    const intellect_hw64_snapshot_t *welcome_hw=intellect_hw64_snapshot();
+    const intellect_block64_info_t *welcome_disk=intellect_block64_info();
+    const intellect_welcome64_info_t welcome_info={
+        welcome_hw ? welcome_hw->cpu_vendor : "UNKNOWN",
+        welcome_hw ? welcome_hw->pci_count : 0u,
+        welcome_hw ? welcome_hw->acpi_count : 0u,
+        welcome_hw ? welcome_hw->acpi_root_valid : 0u,
+        (uint8_t)(welcome_disk && welcome_disk->ready && welcome_disk->readonly),
+        welcome_disk ? welcome_disk->model : NULL,
+        welcome_disk ? welcome_disk->sectors : 0u
+    };
+    if (intellect_welcome64_render(boot,&welcome_info)) {
+        const char *msg="L1 WELCOME FRAMEBUFFER: READY\n";
+        while (*msg) intellect_serial64_putc(*msg++);
+    } else {
+        print(&c,"L1 WELCOME FRAMEBUFFER: UNAVAILABLE\n");
+    }
+    intellect_i2_probe_vfs();
+    /* U1: launch a separate ring3 terminal. On exit/fault, recover to C1. */
+    if (!intellect_u1_terminal_run(boot, bootstrap_cr3)) {
+        const char *msg="U1 TERMINAL: NOT_READY; C1 fallback\n";
+        while (*msg) intellect_serial64_putc(*msg++);
+    }
     if (!intellect_monitor64_run(boot)) {
+        enable_fatal_visual(&c);
         c.foreground=0xFF8D8Du;
         print(&c,"UART COM1 MISSING - CPU HALTED\n");
     }

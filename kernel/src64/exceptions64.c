@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "memcore64.h"
+#include "userterminal64.h"
 
 typedef struct __attribute__((packed)) {
     uint16_t offset_low, selector;
@@ -29,8 +30,8 @@ _Static_assert(sizeof(descriptor_ptr_t)==10u,"Descriptor table pointer width");
 _Static_assert(sizeof(tss64_t)==104u,"TSS64 width");
 
 extern const int32_t intellect64_exception_offsets[32];
-static uint64_t gdt[5] __attribute__((aligned(16)));
-static idt_gate_t idt[32] __attribute__((aligned(16)));
+static uint64_t gdt[7] __attribute__((aligned(16)));
+static idt_gate_t idt[129] __attribute__((aligned(16)));
 static tss64_t tss __attribute__((aligned(16)));
 static uint8_t df_stack[4096] __attribute__((aligned(16)));
 static uint8_t pf_stack[4096] __attribute__((aligned(16)));
@@ -55,6 +56,8 @@ void intellect64_idt_install(void) {
              (((limit >> 16) & UINT64_C(0xf)) << 48) |
              (((uint64_t)(base >> 24) & UINT64_C(0xff)) << 56);
     gdt[4] = (uint64_t)(base >> 32);
+    gdt[5] = UINT64_C(0x00CFF2000000FFFF); /* user data 0x2B */
+    gdt[6] = UINT64_C(0x00AFFA000000FFFF); /* user code 0x33 */
     tss.ist1 = (uint64_t)(uintptr_t)(df_stack + sizeof(df_stack));
     tss.ist2 = (uint64_t)(uintptr_t)(pf_stack + sizeof(pf_stack));
     tss.ist3 = (uint64_t)(uintptr_t)(nmi_stack + sizeof(nmi_stack));
@@ -97,11 +100,23 @@ void intellect64_idt_install(void) {
     __asm__ volatile("lidt %0" : : "m"(idtr) : "memory");
 }
 
+extern void intellect_u1_int80(void);
+void intellect64_user_tss_set_rsp0(uint64_t sp) { tss.rsp0=sp; }
+void intellect64_user_trap_install(void) {
+    idt_set(128u,(uintptr_t)intellect_u1_int80,0u);
+    idt[128].type_attr=UINT8_C(0xEE); /* present DPL3 interrupt gate */
+    volatile descriptor_ptr_t idtr;
+    idtr.limit=(uint16_t)(sizeof(idt)-1u);
+    idtr.address=(uint64_t)(uintptr_t)idt;
+    __asm__ volatile("lidt %0"::"m"(idtr):"memory");
+}
 __attribute__((noreturn)) void intellect64_exception_dispatch(const uint64_t *frame) {
     /* 15 saved GPRs, then vector, error, RIP, CS, RFLAGS.
      * Error-code vectors are 8, 10..14, 17, 21, 29, 30.
      */
     uint64_t cr2=0;
     __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
+    if ((frame[18] & 3u)==3u)
+        intellect_u1_abort_fault(frame[15],frame[16],frame[17],cr2);
     intellect64_fault_report(frame[15],frame[16],frame[17],cr2);
 }

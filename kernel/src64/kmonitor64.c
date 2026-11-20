@@ -8,6 +8,8 @@
 #include "pmm64.h"
 #include "vmm64.h"
 #include "serial64.h"
+#include "hwdiag64.h"
+#include "diskdiag64.h"
 
 static void ch(intellect_monitor64_t *m, char c) {
     m->output(m->ctx, c);
@@ -53,6 +55,8 @@ static void command(intellect_monitor64_t *m) {
     if(eq(s,"help")) {
         txt(m,"COMMANDS: help about boot mem vmm cpu clear echo <text> halt\n");
         txt(m,"NOTE: kernel diagnostic monitor; no files, users or processes yet.\n");
+        txt(m,"HW COMMANDS: hw summary | hw list | hw drivers | hw pci | hw acpi | hw cpu | hw tree\n");
+        txt(m,"DISK COMMANDS: disk info | disk mbr | disk boot | disk gpt\n");
     } else if(eq(s,"about")) {
         txt(m,"IntellectOS C1 x86-64 native kernel, BootInfo ABI v1\n");
         txt(m,"COM1 38400 8N1, QEMU interactive monitor, no UEFI services\n");
@@ -81,6 +85,13 @@ static void command(intellect_monitor64_t *m) {
     } else if(eq(s,"halt")) {
         txt(m,"CPU HALT REQUESTED; reset QEMU to start again\n");
         m->stop_requested=1u;
+    } else if(s[0]=='h' && s[1]=='w' && (s[2]==' ' || s[2]==0)) {
+        if (!intellect_hwdiag64_command(s,m->output,m->ctx))
+            txt(m,"UNKNOWN HW SUBCOMMAND; type hw help\n");
+    } else if(s[0]=='d' && s[1]=='i' && s[2]=='s' && s[3]=='k' &&
+              (s[4]==' ' || s[4]==0)) {
+        if (!intellect_diskdiag64_command(s,m->output,m->ctx))
+            txt(m,"UNKNOWN DISK SUBCOMMAND; type disk help\n");
     } else if(eq(s,"echo") ||
               (s[0]=='e' && s[1]=='c' && s[2]=='h' && s[3]=='o' && s[4]==' ')) {
         if(s[4]==' ') txt(m,s+5);
