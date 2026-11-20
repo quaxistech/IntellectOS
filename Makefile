@@ -93,15 +93,16 @@ $(BUILD)/kernel64:
 	mkdir -p $@
 $(BUILD)/kernel64/entry.o: kernel/x86_64/entry.S | $(BUILD)/kernel64
 	$(K64_CC) --target=x86_64-unknown-none-elf -c $< -o $@
-$(BUILD)/kernel64/kernel.o: kernel/src64/kernel.c kernel/src64/font5x7.h kernel/include/bootinfo.h kernel/include/pmm64.h kernel/include/memcore64.h | $(BUILD)/kernel64
+$(BUILD)/kernel64/kernel.o: kernel/src64/kernel.c kernel/src64/font5x7.h kernel/include/bootinfo.h kernel/include/pmm64.h kernel/include/memcore64.h kernel/include/kheap64.h kernel/include/vmm64.h | $(BUILD)/kernel64
 	$(K64_CC) $(K64_FLAGS) -c $< -o $@
-MEMCORE64_OBJS := $(addprefix $(BUILD)/kernel64/,$(addsuffix .o,pmm64 memcore64 exceptions64 vmm64))
-$(BUILD)/kernel64/%.o: kernel/src64/%.c kernel/include/bootinfo.h kernel/include/pmm64.h kernel/include/memcore64.h | $(BUILD)/kernel64
+MEMCORE64_OBJS := $(addprefix $(BUILD)/kernel64/,$(addsuffix .o,pmm64 memcore64 exceptions64 vmm64 kheap64))
+CONSOLE64_OBJS := $(BUILD)/kernel64/serial64.o $(BUILD)/kernel64/kmonitor64.o
+$(BUILD)/kernel64/%.o: kernel/src64/%.c kernel/include/bootinfo.h kernel/include/pmm64.h kernel/include/memcore64.h kernel/include/kheap64.h kernel/include/vmm64.h | $(BUILD)/kernel64
 	$(K64_CC) $(K64_FLAGS) -c $< -o $@
 $(BUILD)/kernel64/exceptions_asm.o: kernel/x86_64/exceptions64.S | $(BUILD)/kernel64
 	$(K64_CC) --target=x86_64-unknown-none-elf -c $< -o $@
-$(BUILD)/kernel64.elf: $(BUILD)/kernel64/entry.o $(BUILD)/kernel64/kernel.o $(MEMCORE64_OBJS) $(BUILD)/kernel64/exceptions_asm.o kernel/x86_64/linker.ld
-	$(K64_LD) -m elf_x86_64 -nostdlib --build-id=none -T kernel/x86_64/linker.ld -o $@ $(BUILD)/kernel64/entry.o $(BUILD)/kernel64/kernel.o $(MEMCORE64_OBJS) $(BUILD)/kernel64/exceptions_asm.o
+$(BUILD)/kernel64.elf: $(BUILD)/kernel64/entry.o $(BUILD)/kernel64/kernel.o $(MEMCORE64_OBJS) $(BUILD)/kernel64/exceptions_asm.o kernel/x86_64/linker.ld $(CONSOLE64_OBJS)
+	$(K64_LD) -m elf_x86_64 -nostdlib --build-id=none -T kernel/x86_64/linker.ld -o $@ $(BUILD)/kernel64/entry.o $(BUILD)/kernel64/kernel.o $(MEMCORE64_OBJS) $(BUILD)/kernel64/exceptions_asm.o $(CONSOLE64_OBJS)
 $(BUILD)/kernel64.bin: $(BUILD)/kernel64.elf
 	$(K64_OBJCOPY) -O binary $< $@
 	$(PYTHON) tools/verify_kernel64.py $(BUILD)/kernel64.elf $@
@@ -137,3 +138,10 @@ uefi-run: uefi-check
 
 uefi-e-check: uefi-check
 uefi-e-run: uefi-run
+
+# IntellectOS C1 Console Foundation
+.PHONY: uefi-console uefi-console-gui
+uefi-console: uefi-check
+	@bash tools/run_uefi_console.sh
+uefi-console-gui: uefi-check
+	@bash tools/run_uefi_console.sh --gui

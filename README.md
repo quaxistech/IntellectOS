@@ -11,7 +11,7 @@ Both produce the **Intellect BootInfo ABI v1** (152-byte header; separate 24-byt
 
 ## Verified status
 
-- `make check`: 23 host/unit tests and BIOS/UEFI binary-image verification passed on the submitted Stage E source tree.
+- M1 D2 baseline: `make clean check` passed 31 host/unit tests and image verification on 2026-11-19. M2 adds further tests; its boot verification is pending.
 - **QEMU/OVMF Stage E:** native x86-64 kernel screen observed after `ExitBootServices()`.
 - **Physical Lenovo IdeaPad (AMD A6-9225):** native x86-64 kernel screen observed, including `BOOTINFO ABI: V1 VALIDATED` and `NATIVE KERNEL RUNNING`. The same machine previously booted the BIOS 0.4 i386 kernel.
 - These are **observational runtime checks**, not formal validation of every code path, arbitrary firmware implementation, page table, or driver.
@@ -95,19 +95,25 @@ For the implementation details and limitations, see [Architecture](docs/ARCHITEC
 
 This repository is publicly readable. **No license has been granted** at this stage; all rights are reserved by the respective copyright holders unless and until a license file is added. Do not add third-party code or sample firmware blobs without verifying their redistribution terms.
 
-## Experimental Memory Core patch (not yet hardware-verified)
+## Memory Core Foundation (M1 D2 verified)
 
-The proposed foundation adds a fail-closed low-4-GiB physical-page allocator,
+The verified M1 D2 foundation adds a fail-closed low-4-GiB physical-page allocator,
 IDT/GDT/TSS exception diagnostics and a 512-KiB runtime ELF linker bound.
 See [Memory Core Foundation](docs/MEMORY_CORE_FOUNDATION.md) for ownership
 assumptions and the QEMU/Lenovo acceptance sequence. The historical 23-test
 Stage E checkpoint above remains a **prior** observation, not a validation of
 these new changes. No BIOS implementation or BootInfo v1 layout is changed.
 
-## Experimental Memory Core M1 (QEMU validation pending)
+## Memory Core M1 D2 (verified on QEMU and Lenovo, 2026-11-19)
 
 This stage fixes the Stage E native-entry register handoff and adds an
 NX-enforced supervisor-only high-half scratch VMM window with 4-KiB mappings.
 It does not yet implement global W^X, guard pages for the kernel stack,
 full kernel virtual-memory isolation, or a kernel heap. See
 [Memory Core M1](docs/MEMORY_CORE_M1.md).
+
+## Memory Core M2 — candidate, host-tested only
+
+Adds a bounded single-CPU kernel heap using slab classes and page runs, backed
+by PMM and high-half RW/NX VMM mappings. Its QEMU and physical Lenovo checks
+remain pending. See [Memory Core M2](docs/MEMORY_CORE_M2.md).

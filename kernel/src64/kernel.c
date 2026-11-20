@@ -8,6 +8,9 @@
 #include "../include/memcore64.h"
 #include "../include/pmm64.h"
 #include "../include/vmm64.h"
+#include "../include/kmonitor64.h"
+#include "../include/serial64.h"
+#include "../include/kheap64.h"
 
 #include "font5x7.h"
 
@@ -36,6 +39,7 @@ static void clear_screen(console_t *c) {
     c->col=0;c->row=0;
 }
 static void put_char(console_t *c,char ch) {
+    if (c==active_console) intellect_serial64_putc(ch);
     if(ch=='\r') return;
     if(ch=='\n') {c->col=0;if(c->row+1<c->rows)++c->row;return;}
     if(c->col>=c->columns) {c->col=0;if(c->row+1<c->rows)++c->row;}
@@ -117,6 +121,7 @@ __attribute__((noreturn)) void intellect64_main(const intellect_bootinfo_t *boot
     if(c.columns<36u || c.rows<16u)for(;;)__asm__ volatile("cli; hlt");
     clear_screen(&c);
     active_console=&c;
+    (void)intellect_serial64_init(); /* enable COM1 diagnostics before M1 */
     c.foreground=0x71E4BBu;
     print(&c,"INTELLECT OS - NATIVE X86-64 KERNEL\n");
     c.foreground=0xF2F5FDu;
@@ -167,9 +172,27 @@ __attribute__((noreturn)) void intellect64_main(const intellect_bootinfo_t *boot
     }
     print(&c,"M1 CHECKPOINT: VMM SELFTEST READY\n");
     print(&c,"VMM HIGH-HALF RW/NX: PASS\n");
+    print(&c,"M2 CHECKPOINT: KHEAP INIT BEGIN\n");
+    if (!intellect_kheap64_init()) {
+        c.foreground=0xFF8D8Du;
+        print(&c,"KHEAP INIT FAILED / CPU HALTED\n");
+        for (;;) __asm__ volatile("cli; hlt");
+    }
+    print(&c,"M2 CHECKPOINT: KHEAP READY\n");
+    if (!intellect_kheap64_self_test()) {
+        c.foreground=0xFF8D8Du;
+        print(&c,"KHEAP SELFTEST FAILED / CPU HALTED\n");
+        for (;;) __asm__ volatile("cli; hlt");
+    }
+    print(&c,"KHEAP SLAB/PAGE-RUN: PASS\n");
     c.foreground=0x71E4BBu;
-    print(&c,"NATIVE KERNEL RUNNING - CPU HALTED\n");
+    print(&c,"NATIVE KERNEL RUNNING - CONSOLE C1\n");
     c.foreground=0xF2F5FDu;
     print(&c,"NO GRUB / NO LINUX / NO DISK WRITES\n");
+    print(&c,"CONSOLE C1: COM1 SERIAL - SEE QEMU TERMINAL\n");
+    if (!intellect_monitor64_run(boot)) {
+        c.foreground=0xFF8D8Du;
+        print(&c,"UART COM1 MISSING - CPU HALTED\n");
+    }
     for(;;)__asm__ volatile("cli; hlt");
 }
