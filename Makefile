@@ -122,8 +122,28 @@ $(BUILD)/uefi/kernel_embed.obj: boot/uefi/kernel_embed.S $(BUILD)/kernel64.bin |
 	$(UEFI_CC) --target=x86_64-pc-win32-coff -c $< -o $@
 $(BUILD)/uefi/handoff_asm.obj: boot/uefi/handoff.S | $(BUILD)/uefi
 	$(UEFI_CC) --target=x86_64-pc-win32-coff -c $< -o $@
-BOOTMENU_EFI_OBJS := $(BUILD)/uefi/bootmenu.obj $(BUILD)/uefi/firmware_storage.obj
-$(UEFI_EFI): $(BOOTMENU_EFI_OBJS) $(BUILD)/uefi/start.obj $(BUILD)/uefi/firmware_info.obj $(BUILD)/uefi/platform_probe.obj $(BUILD)/uefi/bootinfo_builder.obj $(BUILD)/uefi/framebuffer_console.obj $(BUILD)/uefi/handoff.obj $(BUILD)/uefi/handoff_asm.obj $(BUILD)/uefi/kernel_embed.obj
+
+UEFI_INSTALLED_EFI := $(BUILD)/uefi/BOOTX64_INSTALLED.EFI
+
+$(BUILD)/uefi/start_installed.obj: boot/uefi/start.c boot/uefi/uefi_terminal.h $(wildcard boot/uefi/*.h) | $(BUILD)/uefi
+	$(UEFI_CC) --target=x86_64-pc-win32-coff -std=c11 -ffreestanding -fshort-wchar \
+	  -fno-stack-protector -fno-builtin -mno-red-zone -O2 -Wall -Wextra -Werror \
+	  -DINTELLECT_UEFI_INSTALLED=1 -c $< -o $@
+
+UEFI_COMMON_OBJS := $(BUILD)/uefi/firmware_info.obj $(BUILD)/uefi/platform_probe.obj \
+                    $(BUILD)/uefi/bootinfo_builder.obj $(BUILD)/uefi/framebuffer_console.obj \
+                    $(BUILD)/uefi/handoff.obj $(BUILD)/uefi/handoff_asm.obj \
+                    $(BUILD)/uefi/kernel_embed.obj $(BUILD)/uefi/uefi_terminal.obj
+
+$(UEFI_INSTALLED_EFI): $(BUILD)/uefi/start_installed.obj $(UEFI_COMMON_OBJS)
+	$(UEFI_LD) /machine:x64 /subsystem:efi_application /entry:efi_main /nodefaultlib \
+	  /dll /timestamp:0 /out:$@ $^
+
+$(BUILD)/uefi/installed_efi_embed.obj: boot/uefi/installed_efi_embed.S $(UEFI_INSTALLED_EFI) | $(BUILD)/uefi
+	$(UEFI_CC) --target=x86_64-pc-win32-coff -c $< -o $@
+
+BOOTMENU_EFI_OBJS := $(BUILD)/uefi/bootmenu.obj $(BUILD)/uefi/firmware_storage.obj $(BUILD)/uefi/installed_efi_embed.obj
+$(UEFI_EFI): $(BUILD)/uefi/start.obj $(BOOTMENU_EFI_OBJS) $(UEFI_COMMON_OBJS)
 	$(UEFI_LD) /machine:x64 /subsystem:efi_application /entry:efi_main /nodefaultlib \
 	  /dll /timestamp:0 /out:$@ $^
 $(UEFI_IMG): $(BUILD)/intellectos-bios.img $(UEFI_EFI) tools/add_uefi_fat16.py
@@ -173,10 +193,13 @@ uefi-s0-smoke: uefi-check
 	@python3 tools/s0_qemu_smoke.py
 
 # L1: build a physically flashable UEFI image. Nothing writes to a device.
+LIVE_USB_IMG := $(BUILD)/intellectos-live-usb.img
 .PHONY: uefi-live-image
-uefi-live-image: uefi-check $(TARGET_DISK_IMG)
-	cp $(TARGET_DISK_IMG) $(BUILD)/intellectos-live-usb.img
-	@echo "READY: $(BUILD)/intellectos-live-usb.img (Full IntellectOS Live Installation USB Image)"
+$(LIVE_USB_IMG): $(UEFI_EFI) $(TARGET_DISK_IMG) tools/install_target_disk.py
+	$(PYTHON) tools/install_target_disk.py --target $@ --efi $(UEFI_EFI) --size-gib 1 --wipe
+
+uefi-live-image: uefi-check $(LIVE_USB_IMG)
+	@echo "READY: $(LIVE_USB_IMG) (Full IntellectOS Live Installation USB Image)"
 
 .PHONY: uefi-live-smoke
 uefi-live-smoke: uefi-check
@@ -185,7 +208,7 @@ $(BUILD)/kernel64/welcome64.o: kernel/include/welcome64.h kernel/src64/font5x7.h
 $(BUILD)/kernel64/kernel.o: kernel/include/welcome64.h
 
 # B1: independent UEFI boot menu. The USB image remains read-only on host.
-$(BUILD)/uefi/start.obj: boot/uefi/bootmenu.h boot/uefi/firmware_storage.h
+$(BUILD)/uefi/start.obj: boot/uefi/bootmenu.h boot/uefi/firmware_storage.h boot/uefi/uefi_terminal.h
 $(BUILD)/uefi/bootmenu.obj: boot/uefi/bootmenu.h kernel/src64/font5x7.h
 $(BUILD)/uefi/firmware_storage.obj: boot/uefi/firmware_storage.h
 .PHONY: uefi-b1-smoke
@@ -267,8 +290,8 @@ uefi-ifs-smoke: uefi-check $(IFS_IMG)
 # USB-to-Disk Installer workflow: wipe, partition, format ESP & IFS, standalone boot
 TARGET_DISK_IMG := $(BUILD)/intellectos-target-disk.img
 .PHONY: uefi-install-disk uefi-install-smoke
-$(TARGET_DISK_IMG): $(UEFI_EFI) $(BUILD)/user/terminal.ivx $(BUILD)/user/terminal.pub tools/install_target_disk.py installer/target_disk_installer.py
-	$(PYTHON) tools/install_target_disk.py --target $@ --size-gib 1 --wipe
+$(TARGET_DISK_IMG): $(UEFI_INSTALLED_EFI) $(BUILD)/user/terminal.ivx $(BUILD)/user/terminal.pub tools/install_target_disk.py installer/target_disk_installer.py
+	$(PYTHON) tools/install_target_disk.py --target $@ --efi $(UEFI_INSTALLED_EFI) --size-gib 1 --wipe
 
 uefi-install-disk: $(TARGET_DISK_IMG)
 	@echo "READY: $(TARGET_DISK_IMG)"

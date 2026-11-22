@@ -1,140 +1,93 @@
-# IntellectOS / Vibelang / AI Compiler / IVX — единая архитектура
+# Documentation map
 
-**Проект:** ПО 2.0 · **Редакция проектного комплекта:** 1.0 · **Дата:** 20 ноября 2026 г. · **Статус:** DESIGN DRAFT, не заявление о готовой реализации.
+**Updated:** 2026-11-23
 
-## 1. Назначение комплекта
+This file is the entry point for the repository documentation. A document's
+presence does not mean the described feature is implemented. Read the status
+at the top of each document and use the evidence sections below.
 
-Это согласованный проект системы из трёх основных продуктов и одного стандартного формата исполнения:
+## 1. Current implementation evidence
 
-1. **IntellectOS** — самостоятельная интеллектуальная операционная система; управление аппаратурой, процессами, памятью, ресурсами, безопасностью, пользовательскими приложениями и отдельными AI-службами.
-2. **Vibelang** — самостоятельный язык описания программ, их контрактов, алгоритмов, эффектов и требуемых полномочий; расширение исходника `.vibe`.
-3. **ИИ-компилятор** — пока **без утверждённого имени**; создаёт и проверяет машинный код на основе Vibelang, используя ИИ как помощника семантического анализа и оптимизации, но доверяя окончательное решение детерминированным этапам.
-4. **IVX** — формат верифицируемых нативных исполняемых программ IntellectOS; расширение `.ivx`. Это **формат файла, а не четвёртый язык программирования и не обязательная виртуальная машина**.
-
-```
-Намерение разработчика / спецификация / исходники
-                    │
-              Vibelang (*.vibe)
-                    │
-               frontend parser
-                    ▼
-        VSG: семантическая модель (*.vsg)
-                    │  независимая проверка типов/прав/эффектов
-                    ▼
-      VBIR: типизированное IR (*.vbir)
-                    │  детерминированные оптимизации + проверенные AI-гипотезы
-                    ▼
-            ISA backend + assembler
-                    │
-             объект (*.ivo)
-                    │  IVX linker / verifier / signer
-              ┌─────┴─────┐
-              ▼           ▼
-       программа .ivx   библиотека .ivl
-              │           │
-              └─────┬─────┘
-                    ▼
-          подписанный пакет .ivpkg
-                    │
-       IntellectOS Install Manager
-                    │  проверка и фиксированный Closure / LoadPlan
-                    ▼
-             IVX Process Loader
-                    │  ASLR, RX/RO/RW, ACL/capabilities
-                    ▼
-          машинные инструкции CPU
-```
-
-**Запрещённое смешение ролей:** ядро не читает исходники `.vibe`; ОС не обязана запускать модель ИИ для каждого `exec`; Vibelang не исполняется как интерпретируемый скрипт в IVX; компилятор не выдаёт сам себе системные полномочия; подпись файла не означает отсутствие уязвимостей.
-
-## 2. Семейство файлов и владение
-
-| Расширение | Тип | Генератор | Читатель | Исполняется ОС? | Статус |
-|---|---|---|---|---|---|
-| `.vibe` | исходный текст | человек/инструменты | Vibelang frontend | нет | согласовано |
-| `vibe.project.toml` | манифест проекта | разработчик | build manager | нет | предлагаемая схема V1 |
-| `vibe.lock` | фиксированные зависимости | resolver | build manager | нет | предлагаемая схема V1 |
-| `.vsg` | канонический семантический граф | frontend | validator | нет | проектируется |
-| `.vbir` | типизированное промежуточное представление | lowering | optimizer/backend/verifier | нет | проектируется |
-| `.ivo` | объектный машинный файл для компоновки | backend | IVX linker | нет | проектируется |
-| `.ivx` | нативное пользовательское приложение | linker/signer | Install Manager/Loader | **да** | согласовано |
-| `.ivl` | нативная библиотека | linker/signer | Install Manager/Loader | как часть процесса | проектируется |
-| `.ivpkg` | контейнер доставки | package builder | Install Manager | нет, сначала установка | проектируется |
-| `.ivdbg` | отладка, карты исходников | compiler/debug packer | debugger | нет | проектируется |
-| `Closure Record` | внутренний системный граф точных зависимостей | Install Manager | Loader | нет | проектируется; файл не является публичным ABI |
-| `LoadPlanV1` | внутренний проверенный план отображения | Install Manager | Kernel Loader | нет | проектируется; не принимается из пользовательского каталога |
-
-**Отменённые наименования:** `.vbin`, `.vlib`, `.vobj`, `.vdbg`, `.vpkg` из старого черновика **не используются** как активные расширения. Никаких параллельных конкурирующих форматов. Имена `.ivo`, `.ivl`, `.ivpkg`, `.ivdbg`, `.vsg`, `.vbir`, `vibe.project.toml` и `vibe.lock` — предлагаемые для утверждения вместе с этой редакцией.
-
-## 3. Технические границы и доверие
-
-| Домен | Что разрешено | Что запрещено |
+| Area | Document | Status |
 |---|---|---|
-| Ядро | MMU, PMM, планировщик, IPC primitive, handle checks, page verification | нейросетевые решения на пути прерываний, парсинг незнакомого скриптового формата, запуск произвольных резолверов |
-| Доверенный Install Manager | проверять пакеты и подписи, разрешать версии, создавать планы | принимать требования приложения как автоматически выданные права |
-| ИИ-компилятор | генерировать кандидаты, находить ошибки, выбирать оптимизации | обходить парсер/типизацию/verifier, подписывать от имени пользователя без разрешения |
-| Пользовательская программа | работать через разрешённые handles/системные интерфейсы | менять RX-страницы, получать права из одного лишь манифеста |
-| Интеллектуальные службы ОС | анализировать телеметрию с разрешения, предлагать изменения и автоматизировать задачи | самостоятельно изменять ядро/политику или устройства без авторизованного действия |
+| Native boot and ABI | [ARCHITECTURE.md](ARCHITECTURE.md), [BOOTINFO_V1.md](BOOTINFO_V1.md), [UEFI_STAGE_E.md](UEFI_STAGE_E.md) | BIOS 0.4 and Stage E runtime observations recorded |
+| Verification history | [MILESTONES.md](MILESTONES.md), [RELEASE_BASELINE.md](RELEASE_BASELINE.md), [HARDWARE_TEST.md](HARDWARE_TEST.md) | Mixed runtime/host evidence; no blanket certification |
+| Memory Core M1–M3-A | [MEMORY_CORE_FOUNDATION.md](MEMORY_CORE_FOUNDATION.md), [MEMORY_CORE_M1.md](MEMORY_CORE_M1.md), [MEMORY_CORE_M1_VERIFICATION.md](MEMORY_CORE_M1_VERIFICATION.md), [MEMORY_CORE_M2.md](MEMORY_CORE_M2.md), [MEMORY_CORE_M3A.md](MEMORY_CORE_M3A.md) | M1 observed; M2/M3-A implementation and host tests, runtime pending unless separately recorded |
+| Console and hardware | [CONSOLE_C1.md](CONSOLE_C1.md), [HARDWARE_H1_H2.md](HARDWARE_H1_H2.md), [STORAGE_S0_READONLY.md](STORAGE_S0_READONLY.md) | Source and host-test coverage; runtime evidence varies |
+| User and installer foundations | [BOOT_MENU_B1.md](BOOT_MENU_B1.md), [LIVE_USB_L1.md](LIVE_USB_L1.md), [INSTALLATION_FOUNDATION_I2.md](INSTALLATION_FOUNDATION_I2.md), [USER_TERMINAL_U1.md](USER_TERMINAL_U1.md) | Bounded research/prototype features, not a general OS |
+| Future architecture and roadmap | [CONSOLE_FIRST_ROADMAP.md](CONSOLE_FIRST_ROADMAP.md), [ROADMAP.md](ROADMAP.md) | Ordered implementation plans and acceptance gates |
 
-## 4. Фактическое состояние репозитория на 20.11.2026
+## 2. Status vocabulary
 
-Репозиторий: `https://github.com/quaxistech/IntellectOS` · локальный проект: `/home/quaxis/IntellectOS`. Проверено по публичному README и документам `docs/ARCHITECTURE.md`, `docs/BOOTINFO_V1.md`, `docs/MEMORY_CORE_M1.md`, `docs/MEMORY_CORE_M1_VERIFICATION.md`.
+- **Runtime-observed** — the behavior was observed in QEMU/OVMF or on a named
+  physical machine. It is not a portability or security certification.
+- **Host-tested** — source-level and host/unit checks pass; this is not
+  evidence of ring transitions, real firmware behavior or real hardware.
+- **Candidate** — implementation exists but acceptance gates remain incomplete.
+- **Design draft** — normative or exploratory specification without a matching
+  implementation; no claim of completion.
+- **Historical** — records a prior patch, checkpoint or uploaded artifact.
 
-- Два независимых пути запуска: Legacy BIOS → i386 protected-mode kernel и UEFI → BOOTX64.EFI → собственное x86-64 ядро после `ExitBootServices`.
-- Общий **BootInfo ABI v1**: фиксированный заголовок **152 байта**, отдельные записи карты памяти по **24 байта**. Изменять его из-за IVX/Vibelang **не требуется**.
-- Зафиксированная проверка Memory Core M1 от **19.11.2026**: `make clean check` — **31 тест**, QEMU/OVMF и реальный Lenovo IdeaPad (AMD A6-9225) — успешные отчётные наблюдения.
-- M1 предоставляет ограниченный low-4-GiB PMM, IDT/TSS/IST и supervisor-only high-half scratch VMM с RW/NX. Первичная identity map всё ещё RWX; полноценная пользовательская изоляция отсутствует.
-- **Пока нет** процессов user mode, многозадачности, полноценного VFS, IPC, приложения IVX, компилятора Vibelang, встроенной модели ИИ. Нельзя маркировать их «готово».
-- Не требуется превращать bootloader UEFI PE32+ или внутреннюю раннюю сборку ядра в `.ivx`: IVX прежде всего для будущего user space.
+## 3. Native implementation documentation
 
-## 5. Статусы требований
+Start with [the architecture overview](ARCHITECTURE.md), then follow:
 
-- **BASELINE** — уже реализовано и задокументировано в исходном репозитории; не интерпретировать как сертификацию.
-- **AGREED** — принципиально согласовано в обсуждении: IntellectOS / Vibelang / ИИ-компилятор / `.ivx`, нативное выполнение, отсутствие обязательного ИИ в запуске.
-- **PROPOSED** — конкретные синтаксисы, байтовые поля, syscall IDs и другие новые детали ниже; требует эталонной реализации и тест-векторов перед статусом FROZEN.
-- **OPTIONAL** — расширение без изменения обязательной семантики и защищённых инвариантов.
+1. [BootInfo ABI v1](BOOTINFO_V1.md)
+2. [UEFI Stage E](UEFI_STAGE_E.md)
+3. [Memory Core foundation](MEMORY_CORE_FOUNDATION.md)
+4. [M1](MEMORY_CORE_M1.md), [M1 verification](MEMORY_CORE_M1_VERIFICATION.md),
+   [M2](MEMORY_CORE_M2.md), [M3-A](MEMORY_CORE_M3A.md)
+5. [C1 console](CONSOLE_C1.md), [H1/H2 hardware](HARDWARE_H1_H2.md),
+   [S0 storage](STORAGE_S0_READONLY.md)
+6. [B1 menu](BOOT_MENU_B1.md), [L1 live USB](LIVE_USB_L1.md),
+   [I2 installation](INSTALLATION_FOUNDATION_I2.md),
+   [U1 terminal](USER_TERMINAL_U1.md)
 
-Нормативные слова: **MUST/ОБЯЗАН**, **MUST NOT/ЗАПРЕЩЕНО**, **SHOULD/СЛЕДУЕТ**, **MAY/МОЖЕТ**. Если в тексте встречается псевдокод/пример, он иллюстративен, пока рядом не приведена нормативная кодировка.
+## 4. Product specifications and proposals
 
-## 6. Состав документации
+These documents define intended future systems and must be read separately
+from the native implementation evidence:
 
-| Файл | Содержание |
-|---|---|
-| `01_INTELLECTOS_SYSTEM_ARCHITECTURE.md` | ядро, загрузка, процессы, память, IPC, драйверы, файлы, планирование, интерфейсы |
-| `02_INTELLECTOS_INTELLIGENCE_LAYER.md` | интеллектуальная подсистема: модели, политики, согласия, ресурсы, диагностика, безопасность |
-| `03_VIBELANG_LANGUAGE_SPEC.md` | синтаксис, семантика, типы, владение, эффекты, интерфейсы и ошибки |
-| `04_AI_COMPILER_ARCHITECTURE.md` | полная архитектура интеллектуального компилятора и доказуемой проверки |
-| `05_IVX_BINARY_EXECUTABLE_SPEC.md` | формат `.ivx`: байты, сегменты, Merkle, ABI, загрузка, оптимизации, подписи |
-| `06_VSG_VBIR_INTERMEDIATE_FORMATS.md` | семантический граф, IR, нормальная форма, безопасность, передача между стадиями |
-| `07_OBJECT_LIBRARY_PACKAGE_DEBUG_FORMATS.md` | `.ivo`, `.ivl`, `.ivpkg`, `.ivdbg`, `.vibe` и манифесты/lock |
-| `08_RUNTIME_ABI_LOADER_AND_IPC.md` | пользовательский ABI, запускающий протокол, системные вызовы, ресурсы, IPC |
-| `09_SECURITY_SUPPLY_CHAIN_AND_UPDATES.md` | цепочка доверия, подпись, полномочия, безопасная установка, обновления |
-| `10_IMPLEMENTATION_PLAN.md` | инженерный порядок разработки, вехи, зависимости, критерии допуска |
-| `11_TESTING_CONFORMANCE_AND_BENCHMARKS.md` | матрица проверок, fuzz, негативные тесты, измерения и приёмка |
+| Document | Topic | Status |
+|---|---|---|
+| [01_INTELLECTOS_SYSTEM_ARCHITECTURE.md](01_INTELLECTOS_SYSTEM_ARCHITECTURE.md) | future OS architecture | design draft |
+| [02_INTELLECTOS_INTELLIGENCE_LAYER.md](02_INTELLECTOS_INTELLIGENCE_LAYER.md) | AI and autonomy layer | design draft |
+| [03_VIBELANG_LANGUAGE_SPEC.md](03_VIBELANG_LANGUAGE_SPEC.md) | `.vibe` language | design draft |
+| [04_AI_COMPILER_ARCHITECTURE.md](04_AI_COMPILER_ARCHITECTURE.md) | compiler pipeline | design draft |
+| [05_IVX_BINARY_EXECUTABLE_SPEC.md](05_IVX_BINARY_EXECUTABLE_SPEC.md) | `.ivx` format | draft plus selected implementation foundations |
+| [06_VSG_VBIR_INTERMEDIATE_FORMATS.md](06_VSG_VBIR_INTERMEDIATE_FORMATS.md) | VSG/VBIR | design draft |
+| [07_OBJECT_LIBRARY_PACKAGE_DEBUG_FORMATS.md](07_OBJECT_LIBRARY_PACKAGE_DEBUG_FORMATS.md) | `.ivo`, `.ivl`, `.ivpkg`, `.ivdbg` | design draft |
+| [08_RUNTIME_ABI_LOADER_AND_IPC.md](08_RUNTIME_ABI_LOADER_AND_IPC.md) | processes, ABI and IPC | design draft |
+| [09_SECURITY_SUPPLY_CHAIN_AND_UPDATES.md](09_SECURITY_SUPPLY_CHAIN_AND_UPDATES.md) | trust, updates and supply chain | design draft |
+| [10_IMPLEMENTATION_PLAN.md](10_IMPLEMENTATION_PLAN.md) | implementation dependencies | roadmap/draft |
+| [11_TESTING_CONFORMANCE_AND_BENCHMARKS.md](11_TESTING_CONFORMANCE_AND_BENCHMARKS.md) | conformance program | draft until tests are implemented |
+| [IntellectFS_v1_FULL_ARCHITECTURE_AND_DISK_FORMAT.md](IntellectFS_v1_FULL_ARCHITECTURE_AND_DISK_FORMAT.md) | IFS v1 format | project specification |
 
-## 7. Инварианты комплекта
+## 5. Repository invariants
 
-1. В пользовательское пространство запускается `.ivx`, не `.vibe`, `.vsg`, `.vbir` или `.ivo`.
-2. Поддержка иных исходных языков допустима, но не изменяет IVX ABI.
-3. Изменение версии ядра, компилятора, языка, формата IVX и BootInfo — **независимые события**, не одна общая цифра.
-4. ИИ не входит в trusted computing base проверки подписи и аппаратной изоляции.
-5. Вся цепочка «источник → исполняемый файл» проверяется независимо от вероятностного результата модели.
-6. Никакой системный ABI не создаётся простым объявлением в этой документации: до реализации нужна фиксированная байтовая спецификация и тест-векторы.
-7. Публичный `.ivx` не содержит путей к загрузчику, произвольного кода резолвера зависимостей или автоматически выданных привилегий.
-8. Строгое отсутствие W+X в будущей user-mode системе обязательно; текущее состояние M1 само по себе это ещё не выполняет.
+1. BootInfo ABI v1 is 152 bytes of header plus 24-byte memory records.
+2. BIOS and UEFI remain separate native entry paths.
+3. Build/install operations must write only under `build/`; do not treat an
+   image builder or flashing script as a safe disk-write API.
+4. `.vibe` is source, `.ivx` is executable, and neither is a substitute for an
+   implemented toolchain or loader.
+5. AI is not part of the trusted boot, signature or memory-isolation path.
+6. An implementation document supersedes an older roadmap date or patch
+   description only when it records its own verification evidence.
 
-## 8. Технические решения, не требующие искусственного обещания
+## 6. Validation commands
 
-- Никакой формат не гарантирует «самый маленький файл и самую быструю программу» на всех нагрузках. Оптимизации FASTMAP/BALANCED/COMPACT измеряются.
-- Образ может иметь фиксированный 128-байтный заголовок, но это не означает, что весь граф загрузки или проверка подписи физически помещаются в первые 128 байт.
-- Цифровая подпись подтверждает происхождение и целостность при корректной политике ключей, а не математическую правильность программы.
-- Capability-безопасность нужна как для AI-служб, так и для обычного native-code user space; граф типизированных API сам по себе не изолирует плохой машинный код.
+```bash
+make clean check
+make uefi-console
+make uefi-m3-smoke
+make uefi-hw-smoke
+make uefi-s0-smoke
+make uefi-live-smoke
+make uefi-u1-smoke
+make uefi-ifs-smoke
+```
 
-## 9. Источники проектирования
-
-- Публичный репозиторий `quaxistech/IntellectOS` (документы проекта на 20.11.2026).
-- Предоставленное пользователем сравнительное исследование ELF / PE / Mach-O / Fuchsia / WebAssembly / CHERI / MatR и концепция NEXUS-64.
-- Предоставленная пользователем инженерная критика NEXUS-64 (иммутабельный текст, rel32, зависимость от размера страницы, защиты и типизированные ABI).
-- Предыдущая архитектурная работа над IVX-1 и окончательно согласованное решение `.ivx` вместо `.vbin`.
-
-Это **проектная спецификация**, не отчёт о релизе и не подмена исходников/тестов.
+`make clean check` is the baseline host/image gate. Smoke targets require the
+matching acceptance evidence and must be reported as pass/fail/not-run rather
+than inferred from compilation.

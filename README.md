@@ -11,7 +11,8 @@ Both produce the **Intellect BootInfo ABI v1** (152-byte header; separate 24-byt
 
 ## Verified status
 
-- M1 D2 baseline: `make clean check` passed 31 host/unit tests and image verification on 2026-11-19. M2 adds further tests; its boot verification is pending.
+- Current `make clean check` baseline: BIOS and UEFI image verification, the full `tests/` suite (72 tests), and the `host_tests/` suite (15 tests) pass.
+- Memory Core M1 D2 has QEMU/OVMF and Lenovo observations. M2 and M3-A have host-tested implementations; they must not be described as QEMU/Lenovo-verified without a recorded runtime smoke gate.
 - **QEMU/OVMF Stage E:** native x86-64 kernel screen observed after `ExitBootServices()`.
 - **Physical Lenovo IdeaPad (AMD A6-9225):** native x86-64 kernel screen observed, including `BOOTINFO ABI: V1 VALIDATED` and `NATIVE KERNEL RUNNING`. The same machine previously booted the BIOS 0.4 i386 kernel.
 - These are **observational runtime checks**, not formal validation of every code path, arbitrary firmware implementation, page table, or driver.
@@ -112,8 +113,15 @@ It does not yet implement global W^X, guard pages for the kernel stack,
 full kernel virtual-memory isolation, or a kernel heap. See
 [Memory Core M1](docs/MEMORY_CORE_M1.md).
 
-## Memory Core M2 — candidate, host-tested only
+## Current implementation checkpoints
 
-Adds a bounded single-CPU kernel heap using slab classes and page runs, backed
-by PMM and high-half RW/NX VMM mappings. Its QEMU and physical Lenovo checks
-remain pending. See [Memory Core M2](docs/MEMORY_CORE_M2.md).
+- M2: bounded single-CPU kernel heap, candidate and host-tested.
+- M3-A: bootstrap identity-paging hardening, candidate and host-tested.
+- C1: kernel COM1 monitor and command parser.
+- H1/H2: hardware discovery and guarded bootstrap driver framework.
+- S0: read-only ATA PIO/block/partition backend.
+- B1/L1/I2/U1: boot menu, live welcome image, FAT32/IFS installation foundations and a static user-ring terminal.
+- AI/compiler/IVX: specifications and selected host format/installation foundations exist, but no general Vibelang toolchain or general-purpose IVX application ecosystem is implemented.
+
+See [the documentation map](docs/00_README_ARCHITECTURE_MAP.md), [milestones](docs/MILESTONES.md),
+and [roadmap](docs/ROADMAP.md) for the evidence boundary and next steps.

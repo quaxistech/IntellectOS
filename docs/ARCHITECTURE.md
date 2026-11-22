@@ -40,7 +40,7 @@ UEFI → BOOTX64.EFI → GOP / memory map / ACPI / SMBIOS
 
 The EFI loader is a PE32+ application; its native kernel is a **separate flat position-independent image embedded in the EFI file**. Allocations for the kernel, stack, page tables and BootInfo are made before the final map fetch. UEFI `ExitBootServices()` is called with the exact current `MapKey` and bounded retries on `EFI_INVALID_PARAMETER`; successful transition is irreversible. Native kernel code uses no UEFI Boot Services or console services.
 
-The x86-64 page tables provide bootstrap **identity mappings** using 2-MiB pages, with mapped framebuffer areas marked conservatively uncached. They are not a full virtual memory system; no W^X, process isolation, general allocator or safe reclamation is implemented.
+The x86-64 page tables provide bootstrap **identity mappings** using 2-MiB pages, with mapped framebuffer areas marked conservatively uncached. The M3-A implementation may replace selected bootstrap leaves with RX/RO/RW+NX mappings, but the kernel still has broad supervisor-accessible identity aliases. It is not a full virtual-memory system: process isolation and a safe reclamation or refcount policy are not implemented.
 
 The preliminary UEFI BootInfo snapshot from Stage D is not the final handoff map. Stage E re-reads and normalizes the memory map before exiting firmware. Firmware memory classifications and loader-owned allocations remain conservatively reserved.
 

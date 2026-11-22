@@ -1,10 +1,11 @@
-# Roadmap — after verified Stage E
+# Roadmap — current implementation and next gates
 
 ## Current checkpoint
 
 - BIOS Foundation 0.4: QEMU and physical Lenovo observed, i386 protected-mode kernel with BootInfo v1.
 - UEFI Stage E: QEMU/OVMF and physical Lenovo observed, `ExitBootServices()` and independent native x86-64 framebuffer kernel with BootInfo v1.
-- `make check`: host checks and 23 unit/integration fixtures passed on the Stage E source snapshot.
+- `make clean check`: BIOS/UEFI image verification plus 72 `tests/` and 15 `host_tests/` tests pass.
+- M1 D2 is the verified Memory Core baseline. M2 and M3-A, C1, H1/H2, S0, B1, L1, I2 and U1 have implementation and host-test coverage unless a checkpoint explicitly says runtime verification is pending.
 - These are development milestones, **not** a security, portability or production certification.
 
 ## Next engineering priorities

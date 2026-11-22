@@ -1,6 +1,9 @@
 # Memory Core M1 D2 — Verification Report
 
-Date: 2026-11-19
+**Historical verification checkpoint:** 2026-11-19. The later repository-wide
+baseline is reported in [MILESTONES.md](MILESTONES.md); this section does not
+retroactively certify features added afterward.
+
 BootInfo ABI: v1 (unchanged)
 
 ## Automated verification

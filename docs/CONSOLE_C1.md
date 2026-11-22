@@ -1,6 +1,6 @@
 # IntellectOS C1 — ранняя консоль ядра через QEMU COM1
 
-**Статус:** код для локальной приёмки; не hardware-verified. Исходная база: GitHub `quaxistech/IntellectOS` main `9367458e2e0f03f5e045a3683153714251643ea1` (Memory Core M1 D2). BootInfo ABI v1, BIOS/i386, UEFI Stage E bootloader **не меняются**.
+**Статус:** историческая спецификация локального консольного патча; implementation has since been integrated into the main source tree. **Не hardware-verified.** BootInfo ABI v1, BIOS/i386 и UEFI Stage E bootloader не должны требовать изменения ради консоли.
 
 ## Назначение
 

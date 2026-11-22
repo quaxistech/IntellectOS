@@ -7,6 +7,9 @@
 #include <string.h>
 #include "bootmenu.h"
 
+const uint8_t intellect_installed_efi_start[1] = {0};
+const uint8_t intellect_installed_efi_end[1] = {0};
+
 #define W 800u
 #define H 600u
 static uint8_t pixels[W*H*4u];

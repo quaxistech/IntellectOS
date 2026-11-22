@@ -1,6 +1,6 @@
 # IntellectOS — console-first / server-first engineering roadmap
 
-**Status:** architecture decision 2026-11-20. This does not replace the twelve system/interface specifications; it fixes the implementation order and acceptance criteria. Current baseline `9367458e` Memory Core M1 D2.
+**Status:** historical architecture decision updated 2026-11-23. It fixes implementation order and acceptance criteria, but later checkpoints (M2, M3-A, C1, H1/H2, S0, B1, I2 and U1) have changed the live baseline. Use [MILESTONES.md](MILESTONES.md) for recorded evidence.
 
 ## 1. Product principle
 
@@ -39,7 +39,8 @@ No use of graphical shell is required for startup, package management, debugging
 
 ### M2 — bounded kernel heap
 
-- A separate prepared M2 draft existed in prior work but is not on GitHub main as of 2026-11-20. Audit and merge only after host/QEMU verification.
+- The M2 implementation exists in the current source and has host coverage.
+  QEMU/Lenovo runtime verification remains a separate acceptance gate.
 - Page ownership, size-class/slab or buddy policy, alignment, allocator metadata integrity, zero-init and OOM rollback, guard pages for critical stacks.
 - No reclaiming allocated frames still mapped. Fail-closed tests for double-free, invalid free, integer overflow and reentrancy policy.
 

@@ -140,7 +140,8 @@ def main():
     p.add_argument('--timeout', type=int, default=140)
     args = p.parse_args()
 
-    efi_path = ROOT / 'build/uefi/BOOTX64.EFI'
+    installed_efi = ROOT / 'build/uefi/BOOTX64_INSTALLED.EFI'
+    efi_path = installed_efi if installed_efi.is_file() else ROOT / 'build/uefi/BOOTX64.EFI'
     ivx_path = ROOT / 'build/user/terminal.ivx'
     pub_path = ROOT / 'build/user/terminal.pub'
 

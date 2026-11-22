@@ -4,7 +4,7 @@
  * Features:
  * - High-resolution 8x16 Terminus typography with full ASCII support
  * - Screen resolution adaptive card layout with modern cyber aesthetics
- * - Option 1: Live Terminal Boot (direct Ring 3 shell from USB)
+ * - Option 1: Live Terminal Boot (interactive shell with working USB input)
  * - Option 2: Full On-Firmware Disk Installation to Internal HDD/SSD/NVMe
  */
 #include <stddef.h>
@@ -21,6 +21,9 @@
 
 #define EFI_BY_PROTOCOL 2u
 #define EFI_MAX_BLOCK_HANDLES 128u
+
+extern const uint8_t intellect_installed_efi_start[];
+extern const uint8_t intellect_installed_efi_end[];
 
 static const efi_guid_t block_guid = {0x964e5b21u, 0x6459u, 0x11d2u,
                                       {0x8e, 0x39, 0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b}};
@@ -134,7 +137,7 @@ static void draw(const canvas_t *c, unsigned selected, unsigned drives, unsigned
              "1  BOOT INTELLECT OS (LIVE TERMINAL MODE)", 42u, scale,
              selected == 0u ? 0xf8fafcu : 0x94a3b8u);
         line(c, left + 20u * scale, y + 36u * scale,
-             "Direct Ring 3 Terminal Shell | Memory-Backed Bootstrap | No Disk Changes", 72u, 1u,
+             "Direct Interactive Terminal Shell | USB Keyboard Active | No Disk Changes", 75u, 1u,
              selected == 0u ? 0x5eead4u : 0x556980u);
     }
 
@@ -199,6 +202,8 @@ static int run_firmware_installer(const canvas_t *c, efi_boot_services_t *bs,
     efi_status_t rc = locate.fn(EFI_BY_PROTOCOL, &block_guid, NULL, &n, &handles);
     if (EFI_ERROR(rc) || !handles || !n) return 0;
 
+    efi_block_io_t *disks[EFI_MAX_BLOCK_HANDLES];
+    size_t disk_count = 0;
     efi_block_io_t *source_block = NULL;
     efi_block_io_t *target_block = NULL;
 
@@ -210,6 +215,7 @@ static int run_firmware_installer(const canvas_t *c, efi_boot_services_t *bs,
         if (!m->media_present || m->logical_partition) continue;
         if (m->block_size < 512u || (m->block_size & (m->block_size - 1u)) != 0u) continue;
 
+        disks[disk_count++] = block;
         if (m->removable) {
             if (!source_block) source_block = block;
         } else {
@@ -217,6 +223,15 @@ static int run_firmware_installer(const canvas_t *c, efi_boot_services_t *bs,
         }
     }
     (void)release.fn(handles);
+
+    /* If USB flash drive reports fixed disk (removable == 0), differentiate via disk count */
+    if (!source_block && disk_count >= 2) {
+        target_block = disks[0];
+        source_block = disks[1];
+    } else if (!target_block && disk_count >= 2) {
+        if (source_block == disks[0]) target_block = disks[1];
+        else target_block = disks[0];
+    }
 
     const uint32_t w = c->w, h = c->h;
     const uint32_t left = (w >= 900u) ? w / 10u : 24u;
@@ -233,9 +248,9 @@ static int run_firmware_installer(const canvas_t *c, efi_boot_services_t *bs,
     box(c, left, card_y, cardw, 240u, 0x0d1522u);
     box(c, left, card_y, 4u, 240u, 0x00e5a3u);
 
-    if (!target_block) {
-        line(c, left + 20u, card_y + 24u, "NO FIXED INTERNAL TARGET DISK (HDD/SSD/NVMe) FOUND", 51u, 1u, 0xffa07au);
-        line(c, left + 20u, card_y + 54u, "Cannot install: only removable USB media detected.", 50u, 1u, 0xd0e0f0u);
+    if (disk_count < 2 || !target_block || !source_block || target_block == source_block) {
+        line(c, left + 20u, card_y + 24u, "NO SEPARATE TARGET DISK (HDD/SSD/NVMe) FOUND", 45u, 1u, 0xffa07au);
+        line(c, left + 20u, card_y + 54u, "Cannot install: source and target point to the same drive.", 58u, 1u, 0xd0e0f0u);
         line(c, left + 20u, card_y + 90u, "Press ESC or ENTER to return to Boot Menu.", 42u, 1u, 0x00e5a3u);
         while (1) {
             intellect_efi_key_t key = {0, 0};
@@ -244,8 +259,6 @@ static int run_firmware_installer(const canvas_t *c, efi_boot_services_t *bs,
         }
         return 0;
     }
-
-    if (!source_block) source_block = target_block; /* fallback if running from RAM */
 
     uint64_t target_size_mb = ((target_block->media->last_block + 1u) * target_block->media->block_size) / (1024u * 1024u);
     char size_str[12]; decimal(size_str, (unsigned)target_size_mb);
@@ -257,11 +270,11 @@ static int run_firmware_installer(const canvas_t *c, efi_boot_services_t *bs,
     line(c, left + 20u + 27u * 9u, card_y + 68u, "MB", 2u, 1u, 0xf0f6fcu);
 
     line(c, left + 20u, card_y + 104u, "INSTALLATION PLAN:", 18u, 1u, 0x00e5a3u);
-    line(c, left + 20u, card_y + 128u, "1. Zero MBR and primary/backup GPT partition tables", 52u, 1u, 0x94a3b8u);
+    line(c, left + 20u, card_y + 128u, "1. Zero MBR and primary/backup GPT partition tables (Wipe)", 58u, 1u, 0x94a3b8u);
     line(c, left + 20u, card_y + 148u, "2. Create standard GUID Partition Table (GPT) with protective MBR", 66u, 1u, 0x94a3b8u);
     line(c, left + 20u, card_y + 168u, "3. Format and write FAT32 EFI System Partition (/EFI/BOOT/BOOTX64.EFI)", 70u, 1u, 0x94a3b8u);
     line(c, left + 20u, card_y + 188u, "4. Create IntellectFS v1 System Root (/sbin/terminal.ivx, /etc/system.json)", 75u, 1u, 0x94a3b8u);
-    line(c, left + 20u, card_y + 208u, "5. Configure direct Ring 3 terminal boot (no passwords required)", 65u, 1u, 0x94a3b8u);
+    line(c, left + 20u, card_y + 208u, "5. Install dedicated OS bootloader (direct terminal boot, no passwords)", 72u, 1u, 0x94a3b8u);
 
     box(c, left, card_y + 260u, cardw, 54u, 0x221318u);
     box(c, left, card_y + 260u, 4u, 54u, 0xff5555u);
@@ -280,7 +293,7 @@ static int run_firmware_installer(const canvas_t *c, efi_boot_services_t *bs,
 
     /* Perform Installation with Real-Time Progress Bar */
     box(c, left, card_y + 260u, cardw, 100u, 0x070b12u);
-    line(c, left, card_y + 260u, "WRITING INTELLECT OS SYSTEM IMAGE TO DISK...", 44u, 1u, 0x00e5a3u);
+    line(c, left, card_y + 260u, "WIPING TARGET DISK AND WRITING INTELLECT OS IMAGE...", 52u, 1u, 0x00e5a3u);
 
     const uint32_t pbar_x = left;
     const uint32_t pbar_y = card_y + 288u;
@@ -290,23 +303,39 @@ static int run_firmware_installer(const canvas_t *c, efi_boot_services_t *bs,
     box(c, pbar_x, pbar_y, pbar_w, pbar_h, 0x111c2cu);
     box(c, pbar_x, pbar_y, pbar_w, 1u, 0x2d435eu);
 
-    const uint64_t total_sectors = 2097152u; /* 1 GiB standard live image */
+    /* 1. Wipe first 1 MiB and last 1 MiB */
+    for (size_t z = 0; z < sizeof(g_install_buffer); ++z) g_install_buffer[z] = 0;
+    if (target_block->write_blocks) {
+        (void)target_block->write_blocks(target_block, target_block->media->media_id,
+                                         0u, sizeof(g_install_buffer), g_install_buffer);
+        if (target_block->media->last_block >= 2048u) {
+            (void)target_block->write_blocks(target_block, target_block->media->media_id,
+                                             target_block->media->last_block - 2047u,
+                                             sizeof(g_install_buffer), g_install_buffer);
+        }
+    }
+
+    /* 2. Copy system image sectors */
+    const uint64_t total_sectors = 2097152u; /* 1 GiB standard image */
     const uint32_t sectors_per_chunk = sizeof(g_install_buffer) / 512u;
     const uint32_t total_chunks = (uint32_t)(total_sectors / sectors_per_chunk);
+    int write_error = 0;
 
     for (uint32_t chunk = 0; chunk < total_chunks; ++chunk) {
         uint64_t lba = (uint64_t)chunk * sectors_per_chunk;
 
         /* Read from installation media */
         if (source_block->read_blocks) {
-            (void)source_block->read_blocks(source_block, source_block->media->media_id,
-                                            lba, sizeof(g_install_buffer), g_install_buffer);
+            efi_status_t rrc = source_block->read_blocks(source_block, source_block->media->media_id,
+                                                         lba, sizeof(g_install_buffer), g_install_buffer);
+            if (EFI_ERROR(rrc)) { write_error = 1; break; }
         }
 
         /* Write to target internal disk */
         if (target_block->write_blocks) {
-            (void)target_block->write_blocks(target_block, target_block->media->media_id,
-                                             lba, sizeof(g_install_buffer), g_install_buffer);
+            efi_status_t wrc = target_block->write_blocks(target_block, target_block->media->media_id,
+                                                          lba, sizeof(g_install_buffer), g_install_buffer);
+            if (EFI_ERROR(wrc)) { write_error = 2; break; }
         }
 
         /* Update progress bar every 256 chunks (~16 MiB) */
@@ -321,8 +350,39 @@ static int run_firmware_installer(const canvas_t *c, efi_boot_services_t *bs,
         }
     }
 
+    /* 3. Write dedicated installed OS bootloader directly to target ESP at LBA 4164 */
+    size_t installed_bytes = (size_t)(intellect_installed_efi_end - intellect_installed_efi_start);
+    if (!write_error && installed_bytes > 0 && target_block->write_blocks) {
+        const uint64_t esp_boot_lba = 4164u;
+        size_t written = 0;
+        while (written < installed_bytes) {
+            size_t to_write = installed_bytes - written;
+            if (to_write > sizeof(g_install_buffer)) to_write = sizeof(g_install_buffer);
+            for (size_t b = 0; b < sizeof(g_install_buffer); ++b) {
+                g_install_buffer[b] = (b < to_write) ? intellect_installed_efi_start[written + b] : 0u;
+            }
+            uint64_t write_lba = esp_boot_lba + (written / 512u);
+            (void)target_block->write_blocks(target_block, target_block->media->media_id,
+                                             write_lba, sizeof(g_install_buffer), g_install_buffer);
+            written += to_write;
+        }
+    }
+
     if (target_block->flush_blocks) {
         (void)target_block->flush_blocks(target_block);
+    }
+
+    if (write_error) {
+        box(c, left, card_y + 330u, cardw, 60u, 0x221318u);
+        box(c, left, card_y + 330u, 4u, 60u, 0xff5555u);
+        line(c, left + 20u, card_y + 342u, "ERROR: FAILED TO WRITE TO TARGET DISK (EFI WRITE ERROR)", 55u, 1u, 0xff7b72u);
+        line(c, left + 20u, card_y + 364u, "Installation aborted. Press ENTER to return to menu.", 53u, 1u, 0xffd1b3u);
+        while (1) {
+            intellect_efi_key_t key = {0, 0};
+            if (input->read_key(input, &key) == 0 && key.unicode_char == 13u) break;
+            (void)bs->stall(POLL_US);
+        }
+        return 0;
     }
 
     /* Complete screen */
@@ -331,7 +391,7 @@ static int run_firmware_installer(const canvas_t *c, efi_boot_services_t *bs,
     box(c, left, card_y + 330u, 4u, 60u, 0x00e5a3u);
 
     line(c, left + 20u, card_y + 342u, "SUCCESS: INTELLECT OS HAS BEEN FULLY INSTALLED TO DISK!", 56u, 1u, 0xf0f6fcu);
-    line(c, left + 20u, card_y + 364u, "Remove the USB flash drive and press ENTER to boot into your new OS.", 69u, 1u, 0x5eead4u);
+    line(c, left + 20u, card_y + 364u, "Remove the USB flash drive and press ENTER to restart.", 69u, 1u, 0x5eead4u);
 
     while (1) {
         intellect_efi_key_t key = {0, 0};
@@ -339,7 +399,7 @@ static int run_firmware_installer(const canvas_t *c, efi_boot_services_t *bs,
         (void)bs->stall(POLL_US);
     }
 
-    return 1;
+    return 2; /* 2 indicates installation complete */
 }
 
 int intellect_uefi_bootmenu(const intellect_bootinfo_t *boot,
@@ -393,8 +453,9 @@ int intellect_uefi_bootmenu(const intellect_bootinfo_t *boot,
             if (key.unicode_char == 13u) {
                 if (selected == 0u) return 1;
                 /* Selected == 1: Launch interactive installer */
-                if (run_firmware_installer(&c, bs, input)) return 1;
-                /* If cancelled, redraw menu */
+                int inst_res = run_firmware_installer(&c, bs, input);
+                if (inst_res == 2) return 2;
+                /* If cancelled or error, redraw menu */
                 selected = 0u;
                 mode_view = 0u;
                 draw(&c, selected, drives, mode_view);
@@ -405,8 +466,7 @@ int intellect_uefi_bootmenu(const intellect_bootinfo_t *boot,
         }
 
         if (++idle >= DEFAULT_POLLS) {
-            if (selected == 0u) return 1;
-            idle = 0u;
+            return 3; /* Unattended timeout: proceed to native kernel handoff */
         }
         (void)bs->stall(POLL_US);
     }

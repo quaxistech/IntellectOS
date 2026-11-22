@@ -92,14 +92,13 @@ void intellect_input64_init(void) {
     }
 
     /* 5. Update configuration:
-     * Bit 0: First port interrupt/status enable
-     * Bit 1: Second port interrupt/status enable
-     * Bit 4: First port clock enabled (0 = enabled)
-     * Bit 5: Second port clock enabled (0 = enabled)
-     * Bit 6: Translation enabled (Set 2 -> Set 1)
+     * Disable interrupts (Bit 0 and Bit 1 = 0) since we run in polling mode without IRQ handlers.
+     * Enable clocks (clear Bit 4 and Bit 5).
+     * Enable translation (Bit 6 = 1) if supported.
      */
-    cfg |= (1u << 0) | (1u << 1) | (1u << 6);
+    cfg &= ~((1u << 0) | (1u << 1));
     cfg &= ~((1u << 4) | (1u << 5));
+    cfg |= (1u << 6);
 
     if (i8042_wait_write()) {
         outb(0x64u, 0x60u);
@@ -122,41 +121,6 @@ void intellect_input64_init(void) {
             } else {
                 active_set = 1u;
             }
-        }
-    }
-
-    /* 7. Attempt to select Scan Code Set 1 on the keyboard */
-    if (i8042_wait_write()) {
-        outb(0x60u, 0xF0u);
-        io_wait();
-        for (unsigned i = 0u; i < 1000u; ++i) {
-            if (inb(0x64u) & 0x01u) {
-                if (inb(0x60u) == 0xFAu) break;
-            }
-            io_wait();
-        }
-        if (i8042_wait_write()) {
-            outb(0x60u, 0x01u); /* Set 1 */
-            io_wait();
-            for (unsigned i = 0u; i < 1000u; ++i) {
-                if (inb(0x64u) & 0x01u) {
-                    if (inb(0x60u) == 0xFAu) break;
-                }
-                io_wait();
-            }
-        }
-    }
-
-    /* 8. Send Command 0xF4 (Enable Scanning) to first port */
-    if (i8042_wait_write()) {
-        outb(0x60u, 0xF4u);
-        io_wait();
-        for (unsigned i = 0u; i < 1000u; ++i) {
-            if (inb(0x64u) & 0x01u) {
-                uint8_t resp = inb(0x60u);
-                if (resp == 0xFAu) break;
-            }
-            io_wait();
         }
     }
 
@@ -220,6 +184,7 @@ int intellect_input64_poll_char(void) {
     if (status == 0xFFu || !(status & 0x01u)) return -1;
 
     const uint8_t sc = inb(0x60u);
+    if (sc == 0u || sc == 0xFFu) return -1;
 
     /* Extended scancode prefixes (0xE0, 0xE1) */
     if (sc == 0xE0u || sc == 0xE1u) {

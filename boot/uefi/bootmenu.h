@@ -6,12 +6,15 @@
 /* UEFI Simple Text Input Protocol, valid ONLY before ExitBootServices.
  * UEFI 2.x: Reset (+0), ReadKeyStroke (+8), WaitForKey (+16).
  */
+#ifndef INTELLECT_EFI_INPUT_T_DEFINED
+#define INTELLECT_EFI_INPUT_T_DEFINED
 typedef struct { uint16_t scan_code, unicode_char; } intellect_efi_key_t;
 typedef struct intellect_efi_input {
     efi_status_t (EFIAPI *reset)(struct intellect_efi_input *, uint8_t extended);
     efi_status_t (EFIAPI *read_key)(struct intellect_efi_input *, intellect_efi_key_t *);
     void *wait_for_key;
 } intellect_efi_input_t;
+#endif
 
 /* Return 1 for Terminal Edition, 0 for unusable video/input. Graphical Edition
  * is intentionally not selectable; selecting it displays an explanation.
