@@ -127,7 +127,7 @@ int intellect_welcome64_render(const intellect_bootinfo_t *boot,
         txt(&d,x,y,info->storage_model,30u,small,0xB3CBE0);
     const uint32_t bottom=(h>30u)?h-30u:0u;
     rect(&d,0u,bottom,w,30u,0x07101C);
-    txt(&d,margin,bottom+9u,"TERMINAL EDITION - INSTALLER NOT YET AVAILABLE",
+    txt(&d,margin,bottom+9u,"TERMINAL EDITION - INSTALLER READY (USB TO DISK)",
         64u,1u,0x9EC2D1);
     return 1;
 }

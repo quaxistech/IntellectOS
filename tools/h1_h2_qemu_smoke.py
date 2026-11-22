@@ -18,11 +18,15 @@ class Session:
         self.fd=fd;self.child=child;self.buf='';self.offset=0
     def expect(self,needle,timeout):
         stop=time.monotonic()+timeout
+        sent_exit=False
         while time.monotonic()<stop:
             pos=self.buf.find(needle,self.offset)
             if pos>=0:
                 self.offset=pos+len(needle)
                 return
+            if not sent_exit and 'intellect:/$ ' in self.buf and needle != 'intellect:/$ ':
+                os.write(self.fd, b'exit\r')
+                sent_exit = True
             if self.child.poll() is not None:
                 raise RuntimeError('QEMU exited while awaiting '+repr(needle))
             ready,_,_=select.select([self.fd],[],[],min(.3,max(0.,stop-time.monotonic())))

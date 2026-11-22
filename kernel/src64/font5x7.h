@@ -1,7 +1,7 @@
 #ifndef INTELLECT_FONT5X7_H
 #define INTELLECT_FONT5X7_H
 #include <stdint.h>
-/* Original 5x7 uppercase bitmap glyphs, stored by scanline (bit 4 is leftmost). */
+/* 5x7 bitmap glyphs with full uppercase and lowercase support, stored by scanline (bit 4 is leftmost). */
 static const uint8_t font_upper[26][7] = {
  {14,17,17,31,17,17,17}, {30,17,17,30,17,17,30},
  {14,17,16,16,16,17,14}, {30,17,17,17,17,17,30},
@@ -17,6 +17,21 @@ static const uint8_t font_upper[26][7] = {
  {17,17,17,21,21,21,10}, {17,17,10,4,10,17,17},
  {17,17,10,4,4,4,4}, {31,1,2,4,8,16,31}
 };
+static const uint8_t font_lower[26][7] = {
+ {0,0,14,1,15,17,15}, {16,16,22,25,17,17,30},
+ {0,0,14,17,16,17,14}, {1,1,13,19,17,17,15},
+ {0,0,14,17,31,16,14}, {6,9,8,28,8,8,8},
+ {0,0,15,17,15,1,14}, {16,16,22,25,17,17,17},
+ {0,4,0,12,4,4,14}, {0,2,0,6,2,18,12},
+ {16,16,18,20,24,20,18}, {12,4,4,4,4,4,14},
+ {0,0,26,21,21,17,17}, {0,0,22,25,17,17,17},
+ {0,0,14,17,17,17,14}, {0,0,30,17,30,16,16},
+ {0,0,15,17,15,1,1}, {0,0,22,25,16,16,16},
+ {0,0,15,16,14,1,30}, {8,8,28,8,8,9,6},
+ {0,0,17,17,17,19,13}, {0,0,17,17,17,10,4},
+ {0,0,17,17,21,21,10}, {0,0,17,10,4,10,17},
+ {0,0,17,17,15,1,14}, {0,0,31,2,4,8,31}
+};
 static const uint8_t font_digits[10][7] = {
  {14,17,19,21,25,17,14}, {4,12,4,4,4,4,14},
  {14,17,1,2,4,8,31}, {30,1,1,14,1,1,30},
@@ -25,23 +40,40 @@ static const uint8_t font_digits[10][7] = {
  {14,17,17,14,17,17,14}, {14,17,17,15,1,2,12}
 };
 static inline uint8_t intellect_glyph_row(char ch, unsigned y) {
-    if (ch >= 'a' && ch <= 'z') ch = (char)(ch-'a'+'A');
     if (ch >= 'A' && ch <= 'Z') return font_upper[(unsigned)(ch-'A')][y];
+    if (ch >= 'a' && ch <= 'z') return font_lower[(unsigned)(ch-'a')][y];
     if (ch >= '0' && ch <= '9') return font_digits[(unsigned)(ch-'0')][y];
     switch(ch) {
       case '-': return y==3 ? 31 : 0;
       case '_': return y==6 ? 31 : 0;
       case ':': return (y==2 || y==5) ? 4 : 0;
+      case ';': return y==2 ? 4 : y==5 ? 4 : y==6 ? 8 : 0;
       case '.': return y==6 ? 4 : 0;
       case '/': return (uint8_t)(1u << (y<=4 ? y : 4));
+      case '\\': return (uint8_t)(1u << (4u - (y<=4 ? y : 4)));
       case '=': return (y==2 || y==4) ? 31 : 0;
       case '+': return y==3 ? 31 : (y==1 || y==2 || y==4 || y==5) ? 4 : 0;
+      case '*': return (y==1||y==3) ? 21 : (y==2) ? 14 : 0;
       case '[': return y==0 || y==6 ? 12 : 8;
       case ']': return y==0 || y==6 ? 6 : 2;
       case '(': return y==0 || y==6 ? 2 : 4;
       case ')': return y==0 || y==6 ? 8 : 4;
-      case ',': return y==6 ? 4 : 0;
+      case '{': return (y==0||y==6)?6:(y==3)?12:4;
+      case '}': return (y==0||y==6)?12:(y==3)?6:4;
+      case '<': return (y==1||y==5)?2:(y==2||y==4)?4:(y==3)?8:0;
+      case '>': return (y==1||y==5)?8:(y==2||y==4)?4:(y==3)?2:0;
+      case '|': return 4;
+      case '!': return y==5 ? 0 : 4;
       case '?': return (const uint8_t[]){14,17,1,2,4,0,4}[y];
+      case '$': return (y==0||y==6)?4:(y==1||y==5)?14:(y==2)?18:(y==3)?12:(y==4)?2:0;
+      case '%': return (y==0)?17:(y==1)?18:(y==2)?4:(y==3)?8:(y==4)?18:(y==5)?17:0;
+      case '&': return (y==0||y==4)?10:(y==1||y==3)?21:(y==2)?14:(y==5)?19:(y==6)?13:0;
+      case '^': return y==1?4:y==2?10:0;
+      case '~': return y==2?11:y==3?26:0;
+      case '`': return y==0?8:y==1?4:0;
+      case '\'': return y==0||y==1?4:0;
+      case '"': return y==0||y==1?10:0;
+      case ',': return y==5?4:y==6?8:0;
       case ' ': return 0;
       default: return y==0 || y==6 ? 31 : 17;
     }

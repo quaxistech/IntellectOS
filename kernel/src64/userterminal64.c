@@ -8,6 +8,7 @@
 #include "pmm64.h"
 #include "userterminal64.h"
 #include "terminalfb64.h"
+#include "input64.h"
 
 #define P  UINT64_C(0x001)
 #define W  UINT64_C(0x002)
@@ -23,7 +24,6 @@
 extern const uint8_t intellect_user_terminal_begin[], intellect_user_terminal_end[];
 extern void intellect_u1_enter(uint64_t user_rip, uint64_t user_stack);
 extern __attribute__((noreturn)) void intellect_u1_resume_kernel(void);
-extern int intellect_input64_read_char(void);
 
 /* Order matches GPR pushes in usergate64.S (top of saved trap frame). */
 typedef struct {
@@ -35,6 +35,16 @@ static uint64_t owned[5];  /* PDPT, PD, PT, executable code, stack */
 static uint64_t bootstrap_cr3_u1;
 static uint8_t syscall_stack[16384] __attribute__((aligned(4096)));
 static int user_active;
+static uint8_t external_code[4096];
+static size_t external_bytes;
+/* Set once at boot after validating an exact signed-and-pinned IFS IVX. */
+int intellect_u1_external_program_set(const uint8_t *code,size_t bytes) {
+    if(!code || bytes==0u || bytes>sizeof(external_code) || user_active)return 0;
+    for(size_t i=0;i<bytes;++i)external_code[i]=code[i];
+    external_bytes=bytes;
+    return 1;
+}
+
 
 static void zero4096(uint64_t p) {
     uint64_t *d=(uint64_t *)(uintptr_t)p;
@@ -118,6 +128,7 @@ int intellect_u1_terminal_run(const intellect_bootinfo_t *boot,uint64_t cr3) {
     for(unsigned i=0;i<5u;++i)owned[i]=0;
     bootstrap_cr3_u1=0;user_active=0;
     if(!boot || !cr3 || (cr3&4095u) || cr3>=INTELLECT_PMM_LIMIT) return 0;
+    intellect_input64_init();
     if(!intellect_terminalfb64_init(boot))return 0;
     uintptr_t begin=0,end=0;
     __asm__ volatile("leaq intellect_user_terminal_begin(%%rip),%0" : "=r"(begin));
@@ -134,9 +145,10 @@ int intellect_u1_terminal_run(const intellect_bootinfo_t *boot,uint64_t cr3) {
     /* Immutable executable bytes are copied into a fresh private frame.
      * Identity alias is kernel-only; user code page is RX, stack RW+NX.
      */
-    const uint8_t *src=(const uint8_t *)begin;
+    const uint8_t *src=external_bytes ? external_code : (const uint8_t *)begin;
+    const size_t src_bytes=external_bytes ? external_bytes : (size_t)(end-begin);
     uint8_t *code=(uint8_t *)(uintptr_t)owned[3];
-    for(size_t i=0;i<end-begin;++i)code[i]=src[i];
+    for(size_t i=0;i<src_bytes;++i)code[i]=src[i];
     uint64_t *pdpt=(uint64_t *)(uintptr_t)owned[0];
     uint64_t *pd=(uint64_t *)(uintptr_t)owned[1];
     uint64_t *pt=(uint64_t *)(uintptr_t)owned[2];

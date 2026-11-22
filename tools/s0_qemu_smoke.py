@@ -18,10 +18,14 @@ class Guest:
         self.fd=fd;self.child=child;self.buffer='';self.cursor=0
     def expect(self,text,timeout):
         deadline=time.monotonic()+timeout
+        sent_exit=False
         while time.monotonic()<deadline:
             found=self.buffer.find(text,self.cursor)
             if found>=0:
                 self.cursor=found+len(text);return
+            if not sent_exit and 'intellect:/$ ' in self.buffer and text != 'intellect:/$ ':
+                os.write(self.fd, b'exit\r')
+                sent_exit = True
             if self.child.poll() is not None:
                 raise RuntimeError('QEMU terminated awaiting '+repr(text))
             timeout_left=max(0,deadline-time.monotonic())

@@ -7,10 +7,28 @@ import hmac
 import json
 import os
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-from argon2.low_level import hash_secret_raw, Type
 
 class ConfigError(ValueError):
     pass
+
+
+def _argon2_backend():
+    """Only provisioning/login checks depend on optional host Argon2id.
+
+    Importing timezone validators, IFS readers or image builders must not
+    require the password provisioning dependency. Do not silently weaken the
+    KDF or accept credentials when Argon2id is missing.
+    """
+    try:
+        from argon2.low_level import hash_secret_raw, Type
+    except ModuleNotFoundError as exc:
+        if exc.name not in ('argon2', 'argon2.low_level'):
+            raise
+        raise RuntimeError(
+            'Argon2id backend is missing: install python3-argon2 '
+            '(Ubuntu 24.04) or argon2-cffi in a virtual environment'
+        ) from exc
+    return hash_secret_raw, Type
 
 
 def validate_timezone(name: str) -> str:
@@ -40,6 +58,7 @@ def provision(password: str, timezone: str, *, memory_kib: int=65536,
     secret=_parse_secret(password)
     if not 65536<=memory_kib<=1048576 or not 2<=iterations<=12 or parallelism!=1:
         raise ConfigError('Argon2id production parameter bounds')
+    hash_secret_raw, Type = _argon2_backend()
     salt=os.urandom(16)
     verifier=hash_secret_raw(secret,salt,iterations,memory_kib,parallelism,32,Type.ID,
                              version=19)
@@ -69,6 +88,7 @@ def verify_password(record: dict, password: str) -> bool:
         expect=base64.b64decode(kdf['hash'],validate=True)
         if len(salt)!=16 or len(expect)!=32:return False
         secret=_parse_secret(password)
+        hash_secret_raw, Type = _argon2_backend()
         got=hash_secret_raw(secret,salt,t,m,p,32,Type.ID,version=19)
         return hmac.compare_digest(got,expect)
     except (KeyError,ValueError,TypeError,ConfigError):

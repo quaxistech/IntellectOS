@@ -29,7 +29,11 @@ def main():
                  'L1 WELCOME FRAMEBUFFER: READY',
                  'intellect# ']
         idx=0
+        sent_exit=False
         while time.monotonic()<deadline and idx<len(markers):
+            if not sent_exit and 'intellect:/$ ' in buf:
+                os.write(master, b'exit\r')
+                sent_exit=True
             if child.poll() is not None:raise RuntimeError('QEMU exited before readiness')
             ready,_,_=select.select([master],[],[],0.25)
             if not ready:continue

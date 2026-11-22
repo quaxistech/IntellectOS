@@ -32,11 +32,22 @@ efi_status_t EFIAPI efi_main(efi_handle_t image_handle,efi_system_table_t *st) {
     }
     /* The stock UEFI keyboard/USB/block drivers are available only now.
      * None of their protocol pointers are passed to the native kernel. */
+    /* Check whether booting from removable media (USB) or fixed disk (installed HDD/SSD).
+     * On removable USB media, always show the boot menu (Live Boot vs Install to Disk).
+     * On fixed internal disk (installed system), boot directly into IntellectOS terminal!
+     * If a key is held down during firmware load, the menu can still be entered. */
     unsigned blocks=intellect_uefi_block_device_count(st);
-    if(!intellect_uefi_bootmenu(snapshot.header,
-             (intellect_efi_input_t *)st->con_in,st->boot_services,blocks)) {
-        uefi_output_ascii(out,"INTELLECT OS: boot menu input/display unavailable.\r\n");
-        return EFI_INVALID_PARAMETER;
+    int is_removable=intellect_uefi_is_removable_boot(image_handle,st);
+    intellect_efi_input_t *con_in=(intellect_efi_input_t *)st->con_in;
+    intellect_efi_key_t key={0,0};
+    int key_pressed=(con_in && con_in->read_key && con_in->read_key(con_in,&key)==0);
+
+    if(is_removable || key_pressed) {
+        if(!intellect_uefi_bootmenu(snapshot.header,
+                 con_in,st->boot_services,blocks)) {
+            uefi_output_ascii(out,"INTELLECT OS: boot menu input/display unavailable.\r\n");
+            return EFI_INVALID_PARAMETER;
+        }
     }
     /* All critical allocations and final map refresh happen in handoff.
      * It must not call firmware after a successful ExitBootServices(). */

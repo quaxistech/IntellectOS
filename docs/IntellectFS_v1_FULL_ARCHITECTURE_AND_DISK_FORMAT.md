@@ -1307,6 +1307,99 @@ ifs_durability_backend_status
 
 ---
 
+### 27.3. Утверждённый IFS-1 SYSTEM BOOT PROFILE — точный начальный wire format
+
+**Статус:** реализованный и проверяемый `IFS-1 SYSTEM BOOT PROFILE`; подмножество единой архитектуры IntellectFS v1.0, а не отдельная файловая система и не новая версия протокола. **Не является объявлением production-RW-готовности остальных возможностей IFS-1.** Базовая спецификация: `docs/IntellectFS_v1_FULL_ARCHITECTURE_AND_DISK_FORMAT.md`, §§3–10, 17–18 и 22.
+
+#### Решения, которые больше нельзя оставлять «на усмотрение реализации» для начального образа
+
+- Блок ровно 4096 байт, начало раздела выровнено на 4096, все числа little-endian, смещения `pblk` относительно раздела. `volume_blocks=floor(partition_size/4096)`, минимум 65536 блоков.
+- Один shard `0`, один глобальный writer в момент форматирования, `writer_epoch=1`, `tx_id=1`, `commit_generation=1`. Форматирование производится только на **неиспользуемом образе/разделе**, не на живом RW-томе. Генератор не умеет incremental mutating operation и обязан отказаться от переписывания несогласованного тома.
+- `pblk=0` guard; четыре `IFSBootstrapV1` в `1,2,N-3,N-2`; ring в `3..18` (16 слотов, шаг 1), initial `CHECKPOINT` seal в `3`, reserved recovery `19..82`, immutable `IFSLayoutManifestV1` в `19`, `IFSCommitDescV1` в `20`; tree nodes в `256..259`. Другие слоты кольца не подтверждены и игнорируются; читатель не принимает неподписанный или отсутствующий seal как публикуемое состояние. Запас под метаданные `83..data_first-1`. `data_first = max(16384, align_up(ceil(N*0.05),8))`. Normal data только `data_first..N-4`. Конец `N-3..N-1` — reserved bootstrap/guard.
+- `IFSBootstrapV1`, `IFSSealV1`, `IFSPointerV1`, `IFSNodeV1`, `IFSCommitDescV1` полностью сохраняют исходные размеры, поля, domain-separated BLAKE3 и CRC32C, описанные в базовой спецификации. Формирователь пишет сначала payload и nodes, затем descriptor и layout → `fsync` → четыре bootstrap → `fsync` → seal → `fsync`. ACK только после последнего `fsync`.
+
+#### `IFSLayoutManifestV1`, ровно 4096 байт
+
+| offset | bytes | field |
+|---:|---:|---|
+| 0 | 8 | ASCII `IFSL0001` |
+| 8 | 2 | version=1 |
+| 10 | 2 | header_bytes=128 |
+| 12 | 4 | flags=0 |
+| 16 | 16 | volume_uuid |
+| 32 | 8 | volume_blocks |
+| 40 | 8 | anchor_first=3 |
+| 48 | 8 | anchor_slots=16 |
+| 56 | 8 | recovery_first=19 |
+| 64 | 8 | recovery_blocks=64 |
+| 72 | 8 | metadata_roots_first=256 |
+| 80 | 8 | data_first_pblk |
+| 88 | 8 | reserved_zero |
+| 96 | 32 | BLAKE3(`"IFS/layout/v1\\0" || 4096 bytes with [96:128] zero`) |
+| 128 | 3968 | reserved_zero |
+
+Максимум один глобальный writer, и новые shard ring-таблицы в других профилях нельзя выводить из недостоверного `shard_manifest_hint_pblk` до валидации manifest/root.
+
+#### Canonical single-level B+Tree encoding
+
+Используется неизменённый `IFSNodeV1` (4096 байт) с `level=0`, `header_bytes=96`, BLAKE3 `IFS/node/v1\0`, sorted unique byte keys и `RecordV1`: `<key_bytes:u16, value_bytes:u16, kind:u16, flags:u16> || key || value`. `kind` ноды: `1=OID_TREE`, `2=DIR_TREE`, `3=EXTENT_TREE`, `4=FREE_TREE`; `record.kind` совпадает с `node.kind`, `record.flags=0`. Размер root nodes ограничен одной страницей; `mkifs` возвращает `E2BIG` **до записи**, если любой index не помещается. Никакая массовая загрузка «с тысячами файлов» не обходит этот лимит: полноценный multi-level CoW B+Tree потребует отдельного испытанного writer.
+
+### `ObjectRecordBootV1` 144 байта
+
+| offset | bytes | field |
+|---:|---:|---|
+| 0 | 1 | type: `1 DIR`, `2 REG` |
+| 1 | 1 | flags=0 |
+| 2 | 2 | mode: `0755` DIR/IVX, `0600` `/etc/system.json`, `0644` иные REG |
+| 4 | 4 | reserved_zero |
+| 8 | 16 | parent_oid LE: `epoch:u64, counter:u64`; root parent=self |
+| 24 | 8 | logical_size |
+| 32 | 8 | allocated_bytes |
+| 40 | 8 | object_generation=1 |
+| 48 | 8 | metadata_version=1 |
+| 56 | 8 | link_count=1 |
+| 64 | 16 | owner_principal (zero = bootstrap root identity placeholder) |
+| 80 | 16 | group_principal (zero = bootstrap root group placeholder) |
+| 96 | 16 | capability_policy_id (zero = none, **не авторизация**) |
+| 112 | 8 | ctime_ns=0 (reproducible image, time unknown) |
+| 120 | 8 | mtime_ns=0 |
+| 128 | 8 | atime_ns=0 |
+| 136 | 8 | reserved_zero |
+
+`OID_TREE.key`: ровно 16 байт OID. `OID_TREE.value`: ровно 144 байта record.
+`DIR_TREE.key`: 16 байт `parent_oid` + 1..255 байт UTF-8 basename, без NUL и `/`, не `.`/`..`. NFD и NFC не склеивать. `DIR_TREE.value`: ровно 16 байт child OID. Parent directory должен существовать, root создаётся сам.
+`EXTENT_TREE.key`: 16 байт OID файла + `logical_offset:u64` (boot profile допускает только `0`). `EXTENT_TREE.value`: ровно 128 байт `IFSPointerV1`, `kind=1`, uncompressed/unencrypted, `stored_bytes=logical_size`; zero-byte file НЕ имеет extent. Переиспользование/наложение блоков между файлами запрещено в начальном профиле. Незанятый хвост extent должен быть нулевым.
+`FREE_TREE.key`: `start_pblk:u64`; `FREE_TREE.value`: `length_blocks:u64`. В initial checkpoint ровно один диапазон `[first_unallocated_data_block, N-3)`. Все blocks до `data_first`, включая root nodes, выделены как protected/reserved и не объявляются свободными.
+
+#### Initial descriptor body TLV
+
+Оболочка descriptor следует базовой спецификации (`IFSC0001`, 128-байтный header, максимум 4096 байт initial profile, тело BLAKE3 `IFS/commit-body/v1\0`). TLV: `tag:u16, flags:u16=0, value_bytes:u32, value`. Сортировка строго по `tag` без повторений. Tags 1..11 обязательны.
+
+| Tag | Имя | Значение |
+|---:|---|---|
+| 1 | ROOT_SET | `shard:u32=0,root_count:u32=4` + 4×`IFSPointerV1` root nodes (OID, DIR, EXTENT, FREE) |
+| 2 | OBJECT_EPOCH | `u64=1` |
+| 3 | ALLOCATION_ROOT | повтор 128-байтного FREE_TREE root pointer из ROOT_SET |
+| 4 | ALLOCATION_DELTA | пустой payload для initial mkfs |
+| 5 | RELEASE_QUEUE_ROOT | пустой payload; нет pending releases |
+| 6 | SNAPSHOT_ROOT | пустой payload; нет snapshots |
+| 7 | REQUEST_HASH | ровно 32 нулевых байта — запрос mkfs отдельного клиента отсутствует |
+| 8 | POLICY_REVISION | `u64=1` |
+| 9 | QUOTA_DELTA | `u64=0` |
+| 10 | RECOVERY_FRONTIER | `u64=1` |
+| 11 | LAYOUT_MANIFEST | `pblk:u64=19` + BLAKE3(unmodified 4096-byte manifest) |
+
+Seal `IFSS0001` имеет `kind=CHECKPOINT(2)`, requested=POWER_FAIL(2), `writer_epoch=1`, global shard id `0xffffffff`, `local_seq=1`, `parent_seq=0`, `tx_id=1`, `logical_clock=1`, descriptor at pblk20, `descriptor_blocks=1`, `descriptor_format=1`, `previous_seal_digest=zero`, `root_summary_digest=BLAKE3("IFS/root-summary/v1\\0"||ROOT_SET TLV value)`, `record_slot=3`, `fence_epoch=0`. Seal digest и CRC32C выполняются в точном порядке из §7.1. Mount проверяет ВСЮ цепочку: valid bootstrap → valid layout → valid descriptor TLV/root pointers → valid seal → reachable nodes → file extents; иначе FAIL CLOSED.
+
+#### Связь с UEFI, IVX и login
+
+ESP: GPT type standard EFI + FAT32 с `EFI/BOOT/BOOTX64.EFI` независимо от IFS. IFS: GPT partition type GUID `d78f55f1-1cf3-56b8-822c-768dd51ba449` (проектный UUIDv5; **не зарегистрированный в UEFI Forum**), имя `IntellectFS v1`. Данные на IFS: `/sbin/terminal.ivx` — проверенный host-side Ed25519/Merkle developer profile, `/etc/system.json` — `root` с Argon2id verifier и IANA timezone, `/etc/timezone`, `/etc/trust/developer.pub`. **Ключ внутри IFS НЕ является доверенным якорем.** Для production IVX TrustStore должен быть закреплён вне недоверенного root volume. Для production login ядро должно отдельно проверять Argon2id; наличие JSON не открывает учётную запись автоматически.
+
+#### Проверенные и не реализованные свойства
+
+Реализованы host `mkifs` начального тома, бинарный reader/fsck начального тома, контроль BLAKE3/CRC32C, GPT+FAT32+IFS image, образец C BLAKE3 для будущего ядра. Входные файлы действительно сохраняются внутри IFS, а не в FAT32. **Не реализованы:** полноценный userland IVX execution from IFS, kernel Argon2id, многотранзакционный CoW RW, snapshot GC, native NVMe/USB storage и универсальная PC-поддержка. Эти ограничения являются состоянием реализации, а не разрешением отклониться от нормативной архитектуры.
+
+
 ## 28. Проверка предложений другого ИИ: принятые, изменённые и отклонённые
 
 | Предложение | Наше решение | Обоснование |

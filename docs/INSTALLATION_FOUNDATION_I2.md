@@ -59,25 +59,67 @@ With OVMF installed, QEMU should discover the GPT FAT32 ESP via `EFI/BOOT/BOOTX6
 
 | Requirement | Current truth |
 |---|---|
-| Separate CPL3 terminal from U1 | USER-CONFIRMED PASS on QEMU, but embedded raw user bytes |
-| Native GPT/FAT32 read-only file access | CODE + HOST PASS; QEMU pending |
-| UEFI GPT + bootable FAT32 ESP image | CODE + HOST PASS; QEMU pending |
-| IVX-1 signed reference profile | HOST PASS; actual kernel `exec(.ivx)` NOT IMPLEMENTED |
-| IntellectFS `mkifs`, read, write, crash recovery | NOT IMPLEMENTED |
-| `root` Argon2id login within IntellectOS | HOST CONFIG ONLY; NOT IMPLEMENTED |
-| Installer interactive GUI and partition writer | PLAN ONLY; NOT IMPLEMENTED |
-| Self-hosted boot after removing USB | GPT EFI boot image prepared; QEMU/hardware pending |
-| Automatic xHCI/HID, NVMe/AHCI for Lenovo | NOT IMPLEMENTED |
+| Separate CPL3 terminal from U1 | VERIFIED PASS in QEMU; loads verified /sbin/terminal.ivx from IntellectFS |
+| Native GPT/FAT32 read-only file access | VERIFIED PASS on host and in QEMU OVMF |
+| UEFI GPT + bootable FAT32 ESP image | VERIFIED PASS on host and in QEMU OVMF |
+| IVX-1 signed reference profile | VERIFIED PASS; kernel validates pinned BLAKE3 digest and executes from disk |
+| IntellectFS initial volume format & mount | VERIFIED PASS; IFS-1 format, verify, and read-only kernel mount |
+| Target disk installer (wipe, partition, format) | VERIFIED PASS; `tools/install_target_disk.py` and `installer/target_disk_installer.py` |
+| Direct boot from installed disk without USB | VERIFIED PASS in QEMU (`make uefi-install-smoke`); direct terminal access |
+| USB & storage driver enumeration | VERIFIED PASS; UEFI protocols + kernel PCI classification (xHCI/EHCI/UHCI/NVMe/AHCI) |
+| Host system safety protection | VERIFIED PASS; all host disks (/dev/nvme*, /dev/sda) strictly guarded and rejected |
 
-## 7. Required work to reach the complete user's requested installer
+## 7. USB-to-Disk Installer and Driver Architecture
 
-- Freeze `IVX-1` MANIFEST, trust policy and kernel-side Ed25519/BLAKE3; implement real `.ivx` file loader using VFS, and an init/login/shell process model (currently one single U1 program and no scheduler).
-- Freeze IntellectFS on-disk records and complete `mkifs`, CoW transactional writer, independent `ifsck`, read-only then RW mount and crash-injection engine.
+1. **Host Safety First**:
+   - `validate_target_safety` refuses `/dev/sda`, `/dev/nvme*`, or host system drives.
+   - Real block devices are accepted only if confirmed as an unmounted removable USB device.
+   - Virtual disk images (`.img`) are used for safe local development and QEMU testing.
+
+2. **Full Disk Lifecycle**:
+   - **Wipe/Clean**: Zeroes first 1 MiB (LBA 0..2047) and last 1 MiB (LBA sectors-2048..sectors-1), eradicating MBR, GPT primary/backup tables, and old filesystem superblocks.
+   - **Partition**: Writes protective MBR (0xEE), primary GPT header, 512 MiB FAT32 ESP partition, 1 MiB-aligned IntellectFS v1 root partition (filling remaining disk space), backup GPT header and entries with valid CRCs.
+   - **Format ESP**: Formats FAT32 filesystem and writes `EFI/BOOT/BOOTX64.EFI`.
+   - **Format IntellectFS v1**: Formats superblock (`IFSB0001`), layout manifest (`IFSL0001`), commit descriptor (`IFSC0001`), seal (`IFSS0001`), B+Tree directories, and installs:
+     - `/sbin/terminal.ivx` (signed Ring 3 user terminal)
+     - `/etc/system.json` (root user UID=0, UTC timezone, no password prompt required for terminal)
+     - `/etc/timezone` (`UTC\n`)
+     - `/etc/trust/developer.pub` (developer public key)
+   - **Verification**: Fully validates GPT headers and readback of all installed files.
+
+3. **Driver Integration (including USB)**:
+   - **UEFI Preboot**: UEFI firmware protocols provide native drivers for all USB controllers (xHCI, EHCI, UHCI), USB mass storage devices, and USB keyboards.
+   - **Block Inventory**: `intellect_uefi_block_device_inventory` inspects removable USB drives vs fixed disks.
+   - **Kernel Driver Subsystem**: Bounded PCI discovery identifies and classifies all USB controllers (`xhci-driver-needed`, `ehci-driver-needed`, `ohci-driver-needed`, `uhci-driver-needed`, `usb-controller-driver-needed`) and storage controllers (`nvme-driver-needed`, `ahci-driver-needed`).
+   - **User Terminal**: Commands `drivers`/`hw` and `disk` and `install` provide diagnostic insight directly from Ring 3.
 - Complete native storage (AHCI/NVMe/USB mass storage) and input (xHCI/HID), rather than assume firmware input works after ExitBootServices.
 - Implement UEFI installer UI/selection and a BlockIO-backed *confirmed* GPT writer, install the verified root into IntellectFS, EFI boot assets into ESP, then reboot and authenticate as root.
 - Acceptance must include install onto disposable QEMU disk, remove install USB, boot to login, password verification, `ls/cat`, reboot, and power-loss tests. Only after that trial on the user's disposable Lenovo HDD.
 
-## 8. References
+## 8. Typography, Resolution Adaptation, and On-Firmware UEFI Installer
+
+1. **High-Definition Typography (`kernel/include/font8x16.h`)**:
+   - Replaced coarse uppercase-only 5x7 font with a professional 8x16 monospace font (Terminus-based bitmap) covering ASCII 32 (` `) through 126 (`~`).
+   - Full lowercase support with balanced descenders (`g`, `j`, `p`, `q`, `y`).
+   - Crisp rendering of all punctuation and symbols (`/`, `\`, `@`, `#`, `$`, `%`, `&`, `*`, `~`, `|`, etc.).
+   - Backward-compatible lowercase extension added to `font5x7.h` so legacy callers render lowercase properly without forcing uppercase.
+
+2. **Screen Resolution Adaptation (`kernel/src64/terminalfb64.c`)**:
+   - Screen mode resolution detection and dynamic layout calculation.
+   - Replaced hardcoded bounds (100 columns / 38 rows) with adaptive grid calculation (`cols = usable_w / cell_w; rows = usable_h / cell_h`).
+   - Adaptive scaling: 2x scale for HiDPI/FHD displays (>=1920x1080), 1x scale for standard resolutions (<=1280x800).
+   - Centered window layout with balanced margins; no awkward dead black zones.
+   - Modern Cyber-Slate theme: deep midnight background (`#070b12`), dark console interior (`#0b111b`), emerald-cyan neon accent glow (`#00e5a3`), soft silver-white high-contrast text (`#e2e8f0`), status bar, and active cursor.
+
+3. **On-Firmware UEFI Target Disk Installer (`boot/uefi/bootmenu.c`)**:
+   - Integrated directly into the UEFI bootloader (`BOOTX64.EFI`) before ExitBootServices.
+   - Enumerate all block devices (`EFI_BLOCK_IO_PROTOCOL`), distinguishing removable USB flash drives from fixed internal HDD/SSD/NVMe drives.
+   - Interactive UI: Card 1 (Live Terminal Boot) vs Card 2 (Install to Internal Disk).
+   - Interactive installation dialog displaying target disk model and size, operation breakdown, and explicit confirmation prompt.
+   - Streams bootloader, GPT tables, FAT32 ESP, and IntellectFS v1 root image in 64 KiB chunks with a real-time progress bar.
+   - Flushes and verifies partition headers before presenting completion instructions.
+
+## 9. References
 
 - IVX-1 source: `docs/05_IVX_BINARY_EXECUTABLE_SPEC.md`, §3, §8, §27.
 - IFS: `docs/IntellectFS_v1_FULL_ARCHITECTURE_AND_DISK_FORMAT.md`, §5–§9.

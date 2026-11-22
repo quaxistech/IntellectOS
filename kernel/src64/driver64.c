@@ -129,8 +129,13 @@ const char *intellect_driver64_pci_requirement(const intellect_hw64_pci_t *p) {
         return "nvme-driver-needed";
     if (p->class_code==1u && p->subclass==6u && p->prog_if==1u)
         return "ahci-driver-needed";
-    if (p->class_code==0x0Cu && p->subclass==3u && p->prog_if==0x30u)
-        return "xhci-driver-needed";
+    if (p->class_code==0x0Cu && p->subclass==3u) {
+        if (p->prog_if==0x30u) return "xhci-driver-needed";
+        if (p->prog_if==0x20u) return "ehci-driver-needed";
+        if (p->prog_if==0x10u) return "ohci-driver-needed";
+        if (p->prog_if==0x00u) return "uhci-driver-needed";
+        return "usb-controller-driver-needed";
+    }
     if (p->class_code==2u) return "network-driver-needed";
     return "no-controller-driver";
 }

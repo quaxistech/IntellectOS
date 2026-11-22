@@ -4,17 +4,24 @@
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-image="$repo/build/intellectos-live-usb.img"
-if [[ ! -f "$image" ]]; then
-    echo "ERROR: missing $image (run: make uefi-live-image)" >&2
-    exit 2
-fi
-if (( $# != 1 )); then
-    echo "Usage: bash tools/flash_live_usb.sh /dev/sdX" >&2
+
+if (( $# < 1 || $# > 2 )); then
+    echo "Usage: bash tools/flash_live_usb.sh /dev/sdX [path/to/image.img]" >&2
     echo "First identify the USB disk using: lsblk -p -o NAME,SIZE,MODEL,TRAN,RM,TYPE,MOUNTPOINTS" >&2
     exit 2
 fi
+
 selected="$1"
+if (( $# == 2 )); then
+    image="$(readlink -f -- "$2")"
+else
+    image="$repo/build/intellectos-live-usb.img"
+fi
+
+if [[ ! -f "$image" ]]; then
+    echo "ERROR: missing image file: $image (run: make uefi-live-image or make uefi-ifs-image)" >&2
+    exit 2
+fi
 device="$(readlink -f -- "$selected")"
 if [[ "$device" != /dev/* || ! -b "$device" ]]; then
     echo "ERROR: not a block device: $selected" >&2
@@ -58,9 +65,13 @@ fi
 if lsblk -nrpo MOUNTPOINTS "$device" | grep -q '[^[:space:]]'; then
     echo "REFUSED: a partition was mounted during confirmation" >&2; exit 2
 fi
-sudo dd if="$image" of="$device" bs=4M iflag=fullblock conv=fsync status=progress
+sudo_cmd=(sudo)
+if [[ -n "${SUDO_ASKPASS:-}" ]]; then
+    sudo_cmd+=( -A )
+fi
+"${sudo_cmd[@]}" dd if="$image" of="$device" bs=4M iflag=fullblock conv=fsync status=progress
 sync
 printf 'Reading image back for verification...\n'
-sudo cmp -n "$image_bytes" -- "$image" "$device"
+"${sudo_cmd[@]}" cmp -n "$image_bytes" -- "$image" "$device"
 echo "PASS: flash image written and byte-for-byte verified on USB: $device"
-echo "Now boot the Lenovo in UEFI mode from this USB device. No HDD writes are part of IntellectOS L1."
+echo "Now boot in UEFI mode from this USB device."

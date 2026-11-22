@@ -42,7 +42,7 @@ def main():
             if ready:
                 chunk=os.read(master,8192)
                 buf+=chunk.decode('utf8','replace').replace('\r\n','\n').replace('\r','\n')
-            if 'COMMANDS: help about pwd echo <text> mem clear exit' in buf:break
+            if 'COMMANDS: help about pwd echo <text> mem clear' in buf and 'exit' in buf:break
         else:raise RuntimeError('no user-mode help reply')
         os.write(master,b'echo U1_RING3_OK\r')
         deadline=time.monotonic()+15

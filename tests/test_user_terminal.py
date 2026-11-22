@@ -38,4 +38,14 @@ class TestU1Terminal(unittest.TestCase):
         subprocess.run(['python3','tools/verify_user_terminal.py',
                         'build/user/terminal.elf','build/user/terminal.bin'],
                         cwd=ROOT,check=True,capture_output=True)
+    def test_keyboard_set1_and_set2_input(self):
+        for flags in ('-O0','-O2'):
+            with tempfile.TemporaryDirectory() as td:
+                exe=str(Path(td)/'input64_test')
+                subprocess.run(['gcc','-std=c11',flags,'-Wall','-Wextra','-Werror',
+                                '-Ikernel/include','-DINTELLECT_INPUT64_HOST_TEST',
+                                'kernel/src64/input64.c','tests/input64_host.c',
+                                '-o',exe],cwd=ROOT,check=True,capture_output=True,text=True)
+                proc=subprocess.run([exe],check=True,capture_output=True,text=True)
+                self.assertIn('PASS: input64 Set 1 and Set 2 keyboard decoding verified',proc.stdout)
 if __name__=='__main__':unittest.main()

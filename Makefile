@@ -59,9 +59,14 @@ run-headless: bios-check
 clean:
 	rm -rf $(BUILD)
 help:
-	@echo 'make check         Compile and test both BIOS and UEFI Stage E (non-destructive)'
+	@echo 'make check         Compile and test both BIOS and UEFI Stage E and host tests'
 	@echo 'make bios-check    Validate unchanged BIOS 0.4 path'
 	@echo 'make uefi-e-run    Boot native Stage E kernel in QEMU/OVMF'
+	@echo 'make uefi-u1-smoke Boot U1 Ring3 terminal in QEMU/OVMF'
+	@echo 'make uefi-live-image Produce 32 MiB live USB raw image'
+	@echo 'make uefi-gpt-image Produce 1 GiB GPT+FAT32 preinstall image'
+	@echo 'make uefi-ifs-image Produce 1 GiB GPT+FAT32+IFS installed image'
+	@echo 'make uefi-ifs-smoke Boot QEMU with IFS verified root + terminal'
 	@echo 'make run           Boot in QEMU with VGA window and COM1 in terminal'
 	@echo 'make run-headless  QEMU with COM1 output in terminal'
 	@echo 'make image         Produce raw BIOS USB-HDD image'
@@ -88,7 +93,7 @@ K64_OBJCOPY := llvm-objcopy
 K64_FLAGS := --target=x86_64-unknown-none-elf -std=c11 -ffreestanding -fpie \
               -fno-stack-protector -fno-builtin -mno-red-zone -mgeneral-regs-only -mcmodel=small \
               -O2 -Wall -Wextra -Werror -fno-asynchronous-unwind-tables \
-              -fno-unwind-tables -Ikernel/include
+              -fno-unwind-tables -Ikernel/include -I$(BUILD)/kernel64
 $(BUILD)/kernel64:
 	mkdir -p $@
 $(BUILD)/kernel64/entry.o: kernel/x86_64/entry.S | $(BUILD)/kernel64
@@ -102,13 +107,14 @@ H1H2_OBJS := $(BUILD)/kernel64/hardware64.o $(BUILD)/kernel64/driver64.o $(BUILD
 S0_OBJS := $(BUILD)/kernel64/ata_pio64.o $(BUILD)/kernel64/block64.o $(BUILD)/kernel64/partition64.o $(BUILD)/kernel64/diskdiag64.o
 WELCOME64_OBJS := $(BUILD)/kernel64/welcome64.o
 I2_OBJS := $(BUILD)/kernel64/fat32_vfs64.o
+IFS1_OBJS := $(BUILD)/kernel64/ifs_ro64.o $(BUILD)/kernel64/ifs_blake3_v1.o $(BUILD)/kernel64/ifs_exec64.o
 U1_OBJS := $(addprefix $(BUILD)/kernel64/,$(addsuffix .o,userterminal64 userpolicy64 terminalfb64 input64)) $(BUILD)/kernel64/usergate64.o $(BUILD)/kernel64/user_terminal_embed.o
 $(BUILD)/kernel64/%.o: kernel/src64/%.c kernel/include/bootinfo.h kernel/include/pmm64.h kernel/include/memcore64.h kernel/include/kheap64.h kernel/include/vmm64.h | $(BUILD)/kernel64
 	$(K64_CC) $(K64_FLAGS) -c $< -o $@
 $(BUILD)/kernel64/exceptions_asm.o: kernel/x86_64/exceptions64.S | $(BUILD)/kernel64
 	$(K64_CC) --target=x86_64-unknown-none-elf -c $< -o $@
-$(BUILD)/kernel64.elf: $(BUILD)/kernel64/entry.o $(BUILD)/kernel64/kernel.o $(MEMCORE64_OBJS) $(BUILD)/kernel64/exceptions_asm.o kernel/x86_64/linker.ld $(CONSOLE64_OBJS) $(M3A_OBJS) $(H1H2_OBJS) $(S0_OBJS) $(WELCOME64_OBJS) $(U1_OBJS) $(I2_OBJS)
-	$(K64_LD) -m elf_x86_64 -nostdlib --build-id=none -T kernel/x86_64/linker.ld -o $@ $(BUILD)/kernel64/entry.o $(BUILD)/kernel64/kernel.o $(MEMCORE64_OBJS) $(BUILD)/kernel64/exceptions_asm.o $(CONSOLE64_OBJS) $(M3A_OBJS) $(H1H2_OBJS) $(S0_OBJS) $(WELCOME64_OBJS) $(U1_OBJS) $(I2_OBJS)
+$(BUILD)/kernel64.elf: $(BUILD)/kernel64/entry.o $(BUILD)/kernel64/kernel.o $(MEMCORE64_OBJS) $(BUILD)/kernel64/exceptions_asm.o kernel/x86_64/linker.ld $(CONSOLE64_OBJS) $(M3A_OBJS) $(H1H2_OBJS) $(S0_OBJS) $(WELCOME64_OBJS) $(U1_OBJS) $(I2_OBJS) $(IFS1_OBJS)
+	$(K64_LD) -m elf_x86_64 -nostdlib --build-id=none -T kernel/x86_64/linker.ld -o $@ $(BUILD)/kernel64/entry.o $(BUILD)/kernel64/kernel.o $(MEMCORE64_OBJS) $(BUILD)/kernel64/exceptions_asm.o $(CONSOLE64_OBJS) $(M3A_OBJS) $(H1H2_OBJS) $(S0_OBJS) $(WELCOME64_OBJS) $(U1_OBJS) $(I2_OBJS) $(IFS1_OBJS)
 $(BUILD)/kernel64.bin: $(BUILD)/kernel64.elf
 	$(K64_OBJCOPY) -O binary $< $@
 	$(PYTHON) tools/verify_kernel64.py $(BUILD)/kernel64.elf $@
@@ -128,6 +134,7 @@ uefi-check: uefi-image bios-check
 	$(PYTHON) tools/verify_uefi_image.py $(BUILD)/intellectos-bios.img $(UEFI_EFI) $(UEFI_IMG)
 	$(PYTHON) tools/verify_kernel64.py $(BUILD)/kernel64.elf $(BUILD)/kernel64.bin
 	$(PYTHON) -m unittest discover -s tests -v
+	$(PYTHON) -m unittest discover -s host_tests -v
 check: uefi-check
 uefi-run: uefi-check
 	@code=''; vars=''; \
@@ -167,9 +174,9 @@ uefi-s0-smoke: uefi-check
 
 # L1: build a physically flashable UEFI image. Nothing writes to a device.
 .PHONY: uefi-live-image
-uefi-live-image: uefi-check
-	cp $(UEFI_IMG) $(BUILD)/intellectos-live-usb.img
-	@echo "READY: $(BUILD)/intellectos-live-usb.img (USB test image, not installer)"
+uefi-live-image: uefi-check $(TARGET_DISK_IMG)
+	cp $(TARGET_DISK_IMG) $(BUILD)/intellectos-live-usb.img
+	@echo "READY: $(BUILD)/intellectos-live-usb.img (Full IntellectOS Live Installation USB Image)"
 
 .PHONY: uefi-live-smoke
 uefi-live-smoke: uefi-check
@@ -212,3 +219,61 @@ uefi-u1-smoke: uefi-check
 
 # I2: native read-only GPT/FAT32 backend (does not mount IntellectFS).
 $(BUILD)/kernel64/kernel.o: kernel/include/fat32_vfs64.h
+
+$(BUILD)/kernel64/ifs_ro64.o: kernel/include/ifs_ro64.h kernel/include/ifs_blake3_v1.h
+$(BUILD)/kernel64/ifs_blake3_v1.o: kernel/include/ifs_blake3_v1.h
+
+# IFS-1: bind the signed bootstrap IVX to the exact native kernel image.
+$(BUILD)/kernel64/ifs_ivx_pin.h: $(BUILD)/user/terminal.bin tools/make_pinned_dev_ivx.py installer/ivx_v1.py installer/blake3_ref.py | $(BUILD)/kernel64
+	$(PYTHON) tools/make_pinned_dev_ivx.py --program $(BUILD)/user/terminal.bin --ivx $(BUILD)/user/terminal.ivx --pub $(BUILD)/user/terminal.pub --header $@
+$(BUILD)/kernel64/ifs_exec64.o: $(BUILD)/kernel64/ifs_ivx_pin.h kernel/include/ifs_exec64.h kernel/include/ifs_ro64.h kernel/include/userterminal64.h
+
+# I2: preinstall GPT/FAT32 disk image
+GPT_IMG := $(BUILD)/intellectos-preinstall-gpt.img
+.PHONY: uefi-gpt-image uefi-gpt-run
+$(GPT_IMG): $(UEFI_EFI) tools/make_terminal_disk.py tools/verify_terminal_disk.py
+	@rm -f $@
+	$(PYTHON) tools/make_terminal_disk.py --efi $(UEFI_EFI) --output $@ --size-gib 1
+	$(PYTHON) tools/verify_terminal_disk.py $@ --efi $(UEFI_EFI)
+
+uefi-gpt-image: $(GPT_IMG)
+	@echo "READY: $(GPT_IMG)"
+
+uefi-gpt-run: $(GPT_IMG)
+	@bash tools/boot_preinstall_gpt_qemu.sh $(GPT_IMG)
+
+# IFS-1: install disk image with FAT32 ESP + IntellectFS sealed root
+IFS_IMG := $(BUILD)/intellectos-installed-ifs.img
+.PHONY: uefi-ifs-image uefi-ifs-smoke
+$(IFS_IMG): $(UEFI_EFI) $(BUILD)/user/terminal.ivx $(BUILD)/user/terminal.pub $(BUILD)/kernel64/ifs_ivx_pin.h tools/make_ifs_install_image.py tools/verify_installed_system.py
+	@$(PYTHON) -c "import sys; from pathlib import Path; sys.path.insert(0, '.'); \
+	from installer.system_config_v1 import provision, canonical_json; \
+	from tools.make_ifs_install_image import create, verify_kernel_pin; \
+	root_cfg = canonical_json(provision('RootPass123!', 'UTC', memory_kib=65536, iterations=2)); \
+	efi = Path('$(UEFI_EFI)').read_bytes(); \
+	ivx = Path('$(BUILD)/user/terminal.ivx').read_bytes(); \
+	pub = Path('$(BUILD)/user/terminal.pub').read_bytes(); \
+	verify_kernel_pin(Path('$(BUILD)/kernel64/ifs_ivx_pin.h'), ivx); \
+	Path('$@').unlink(missing_ok=True); \
+	create(Path('$@'), efi, ivx, pub, root_cfg, 1)"
+	$(PYTHON) tools/verify_installed_system.py $@ --efi $(UEFI_EFI)
+
+uefi-ifs-image: $(IFS_IMG)
+	@echo "READY: $(IFS_IMG)"
+
+uefi-ifs-smoke: uefi-check $(IFS_IMG)
+	@$(PYTHON) tools/test_ifs_system_qemu.py $(IFS_IMG)
+
+# USB-to-Disk Installer workflow: wipe, partition, format ESP & IFS, standalone boot
+TARGET_DISK_IMG := $(BUILD)/intellectos-target-disk.img
+.PHONY: uefi-install-disk uefi-install-smoke
+$(TARGET_DISK_IMG): $(UEFI_EFI) $(BUILD)/user/terminal.ivx $(BUILD)/user/terminal.pub tools/install_target_disk.py installer/target_disk_installer.py
+	$(PYTHON) tools/install_target_disk.py --target $@ --size-gib 1 --wipe
+
+uefi-install-disk: $(TARGET_DISK_IMG)
+	@echo "READY: $(TARGET_DISK_IMG)"
+
+uefi-install-smoke: uefi-check $(TARGET_DISK_IMG)
+	@$(PYTHON) tools/test_usb_to_disk_install_qemu.py --target-image $(TARGET_DISK_IMG)
+
+

@@ -17,6 +17,8 @@
 #include "../include/block64.h"
 
 #include "../include/fat32_vfs64.h"
+#include "../include/ifs_ro64.h"
+#include "../include/ifs_exec64.h"
 
 /* I2: GPT + FAT32 ESP, read-only; fails closed on non-GPT USB image. */
 static int intellect_i2_block_sector(void *ctx,uint64_t lba,uint8_t out[512]) {
@@ -42,8 +44,38 @@ static void intellect_i2_probe_vfs(void) {
         while(*msg)intellect_serial64_putc(*msg++);
     }
 }
+
+/* IFS-1 initial system profile: read-only native verified root. */
+static void intellect_ifs1_probe(void) {
+    const intellect_block64_info_t *info=intellect_block64_info();
+    if(!info || !info->ready || info->sector_bytes!=512u)return;
+    if(intellect_ifs_ro64_mount(intellect_i2_block_sector,NULL,info->sectors)) {
+        if(!intellect_ifs_exec64_prepare()) {
+            /* Untrusted disk bytes are never executed. This path enters the
+             * read-only built-in U1 recovery until a full boot policy exists. */
+            const char *err="IFS-1: PINNED IVX REJECTED - BUILT-IN RECOVERY U1\n";
+            while(*err)intellect_serial64_putc(*err++);
+        } else {
+            const char *notice="IFS-1: VERIFIED PINNED IVX FROM DISK\n";
+            while(*notice)intellect_serial64_putc(*notice++);
+        }
+        static uint8_t timezone[96];size_t bytes=0;
+        const char *msg="IFS-1: SEALED SYSTEM ROOT VERIFIED\n";
+        while(*msg)intellect_serial64_putc(*msg++);
+        if(intellect_ifs_ro64_file("/etc/timezone",timezone,sizeof(timezone)-1u,&bytes)) {
+            const char *prefix="IFS-1: timezone ";
+            while(*prefix)intellect_serial64_putc(*prefix++);
+            for(size_t i=0;i<bytes;++i)intellect_serial64_putc((char)timezone[i]);
+        }
+    } else {
+        const char *msg="IFS-1: NO VERIFIED ROOT (legacy USB permitted)\n";
+        while(*msg)intellect_serial64_putc(*msg++);
+    }
+}
+
 #include "../include/welcome64.h"
 #include "../include/userterminal64.h"
+#include "../include/input64.h"
 
 #include "font5x7.h"
 
@@ -291,6 +323,8 @@ __attribute__((noreturn)) void intellect64_main(const intellect_bootinfo_t *boot
         print(&c,"L1 WELCOME FRAMEBUFFER: UNAVAILABLE\n");
     }
     intellect_i2_probe_vfs();
+    intellect_ifs1_probe();
+    intellect_input64_init();
     /* U1: launch a separate ring3 terminal. On exit/fault, recover to C1. */
     if (!intellect_u1_terminal_run(boot, bootstrap_cr3)) {
         const char *msg="U1 TERMINAL: NOT_READY; C1 fallback\n";

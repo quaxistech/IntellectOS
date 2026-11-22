@@ -147,8 +147,8 @@ static int lookup(const intellect_fat32_mount_t *m,uint32_t dir,
 }
 int intellect_fat32_open(const intellect_fat32_mount_t *m,
           const char *path,intellect_fat32_file_t *out){
-    if(!m || !m->ready || !path || !out || path[0]!='/')return 0;
-    const char *cursor=path+1;
+    if(!m || !m->ready || !path || !out || path[0]==0)return 0;
+    const char *cursor=(path[0]=='/')?path+1:path;
     uint32_t dir=m->root_cluster;
     for(unsigned depth=0;depth<8u;++depth){
         uint8_t component[11];int last=0;

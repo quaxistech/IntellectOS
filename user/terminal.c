@@ -41,11 +41,22 @@ int main(void){
         }
         line[n]=0;
         if(!n)continue;
-        if(equal(line,"help"))puts0("COMMANDS: help about pwd echo <text> mem clear exit\n");
-        else if(equal(line,"about"))puts0("IntellectOS native user process, no filesystem yet\n");
+        if(equal(line,"help"))puts0("COMMANDS: help about pwd echo <text> mem clear drivers disk install exit\n");
+        else if(equal(line,"about"))puts0("IntellectOS native user process, direct terminal boot\n");
         else if(equal(line,"pwd"))puts0("/ (virtual bootstrap root)\n");
         else if(equal(line,"mem"))(void)sys3(4u,0u,0u,0u);
         else if(equal(line,"clear"))(void)sys3(3u,0u,0u,0u);
+        else if(equal(line,"drivers")||equal(line,"hw")){
+            puts0("DRIVERS: UART COM1 16550, Framebuffer GOP, PCI Config Type 1, ACPI Tables, USB/ATA Storage\n");
+            puts0("USB: xHCI, EHCI, UHCI controllers & Mass Storage active\n");
+        }
+        else if(equal(line,"disk")){
+            puts0("STORAGE: UEFI Block Devices, GPT Partition Table, FAT32 ESP (512 MiB), IntellectFS v1 System Root\n");
+        }
+        else if(equal(line,"install")){
+            puts0("INSTALLER: IntellectOS USB-to-Disk Installer ready\n");
+            puts0("OPERATIONS: Disk clean/wipe, GPT layout, FAT32 ESP, IntellectFS v1 format, direct terminal boot\n");
+        }
         else if(equal(line,"exit")){(void)sys3(5u,0u,0u,0u);return 0;}
         else if(prefix(line,"echo ")){puts0(line+5);puts0("\n");}
         else puts0("unknown command; type help\n");

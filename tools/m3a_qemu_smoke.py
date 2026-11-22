@@ -28,11 +28,15 @@ class Session:
 
     def expect(self, needle: str, timeout: float):
         end = time.monotonic() + timeout
+        sent_exit = False
         while time.monotonic() < end:
             idx = self.buf.find(needle, self.offset)
             if idx >= 0:
                 self.offset = idx + len(needle)
                 return
+            if not sent_exit and 'intellect:/$ ' in self.buf and needle != 'intellect:/$ ':
+                os.write(self.fd, b'exit\r')
+                sent_exit = True
             if self.child.poll() is not None:
                 raise RuntimeError(f'QEMU terminated early ({self.child.returncode}), waiting for {needle!r}')
             wait = min(0.3, max(0.0, end-time.monotonic()))
