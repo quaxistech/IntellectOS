@@ -66,10 +66,10 @@ efi_status_t EFIAPI efi_main(efi_handle_t image_handle, efi_system_table_t *st) 
     unsigned blocks = intellect_uefi_block_device_count(st);
     intellect_efi_input_t *con_in = (intellect_efi_input_t *)st->con_in;
 
+    intellect_uefi_bootmenu_set_context(image_handle, st);
     int choice = intellect_uefi_bootmenu(snapshot.header, con_in, st->boot_services, blocks);
     if (choice == 1) {
-        /* User explicitly selected 1: Live Terminal */
-        intellect_uefi_terminal_run(image_handle, st, &snapshot, 0 /* is_live */);
+        /* User explicitly selected 1: Live Terminal Mode -> jump straight to native kernel */
         intellect_uefi_handoff(image_handle, st, &snapshot);
     } else if (choice == 2) {
         /* Installation complete: reboot to boot from newly installed disk */

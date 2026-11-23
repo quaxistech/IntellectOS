@@ -47,8 +47,8 @@ def _parse_secret(password: str) -> bytes:
     if not isinstance(password, str) or '\0' in password:
         raise ConfigError('password must be Unicode text with no NUL')
     encoded=password.encode('utf-8')
-    if not 12<=len(encoded)<=256:
-        raise ConfigError('password must be between 12 and 256 bytes UTF-8')
+    if not 0<=len(encoded)<=256:
+        raise ConfigError('password must be between 0 and 256 bytes UTF-8')
     return encoded
 
 

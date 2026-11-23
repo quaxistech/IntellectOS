@@ -16,7 +16,7 @@ def main():
                     help='write new chmod-0600 file on host for future IFS install')
     opt=ap.parse_args()
     if opt.output.exists():raise SystemExit('BLOCKED: config already exists')
-    first=getpass.getpass('root password (12+ UTF-8 bytes): ')
+    first=getpass.getpass('root password (0-256 UTF-8 bytes, optional): ')
     again=getpass.getpass('confirm root password: ')
     if first!=again:raise SystemExit('BLOCKED: password mismatch')
     try: blob=canonical_json(provision(first,opt.timezone))

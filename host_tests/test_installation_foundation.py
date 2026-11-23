@@ -99,10 +99,11 @@ class CredentialTests(unittest.TestCase):
         self.assertNotIn('verylong_correct_9?password',canonical_json(record).decode())
         self.assertTrue(verify_password(record['users'][0],'verylong_correct_9?password'))
         self.assertFalse(verify_password(record['users'][0],'incorrect-password'))
-    def test_reject_timezone_traversal_and_short_password(self):
+    def test_reject_timezone_traversal_and_invalid_password(self):
         for name in ('../../etc/shadow','Some/Nonexistent_Zone',''):
             with self.subTest(name=name),self.assertRaises(ConfigError):validate_timezone(name)
-        with self.assertRaises(ConfigError):provision('short','UTC')
+        with self.assertRaises(ConfigError):provision('a'*257,'UTC')
+        with self.assertRaises(ConfigError):provision('bad\0pass','UTC')
 
 if __name__=='__main__':unittest.main()
 

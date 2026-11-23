@@ -19,6 +19,8 @@ typedef struct intellect_efi_input {
 /* Return 1 for Terminal Edition, 0 for unusable video/input. Graphical Edition
  * is intentionally not selectable; selecting it displays an explanation.
  */
+void intellect_uefi_bootmenu_set_context(efi_handle_t image, efi_system_table_t *st);
+
 int intellect_uefi_bootmenu(const intellect_bootinfo_t *boot,
                             intellect_efi_input_t *input,
                             efi_boot_services_t *services,

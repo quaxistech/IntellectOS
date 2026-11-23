@@ -25,8 +25,18 @@
 extern const uint8_t intellect_installed_efi_start[];
 extern const uint8_t intellect_installed_efi_end[];
 
+static efi_handle_t g_boot_image_handle = NULL;
+static efi_system_table_t *g_boot_system_table = NULL;
+
+void intellect_uefi_bootmenu_set_context(efi_handle_t image, efi_system_table_t *st) {
+    g_boot_image_handle = image;
+    g_boot_system_table = st;
+}
+
 static const efi_guid_t block_guid = {0x964e5b21u, 0x6459u, 0x11d2u,
                                       {0x8e, 0x39, 0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b}};
+static const efi_guid_t loaded_image_guid = {0x5b1baa65u, 0xade8u, 0x11d2u,
+                                             {0x9e, 0x36, 0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b}};
 
 typedef struct {
     uint32_t media_id;
@@ -207,30 +217,76 @@ static int run_firmware_installer(const canvas_t *c, efi_boot_services_t *bs,
     efi_block_io_t *source_block = NULL;
     efi_block_io_t *target_block = NULL;
 
+    typedef struct {
+        uint32_t revision;
+        efi_handle_t parent_handle;
+        efi_system_table_t *system_table;
+        efi_handle_t device_handle;
+    } efi_loaded_image_min_t;
+
+    efi_handle_t boot_dev_handle = NULL;
+    if (g_boot_image_handle && handle.fn) {
+        efi_loaded_image_min_t *loaded = NULL;
+        if (!EFI_ERROR(handle.fn(g_boot_image_handle, &loaded_image_guid, (void **)&loaded)) && loaded) {
+            boot_dev_handle = loaded->device_handle;
+        }
+    }
+
+    efi_block_io_t *boot_bio = NULL;
+    if (boot_dev_handle && handle.fn) {
+        (void)handle.fn(boot_dev_handle, &block_guid, (void **)&boot_bio);
+    }
+
     for (size_t i = 0; i < n && i < EFI_MAX_BLOCK_HANDLES; ++i) {
         efi_block_io_t *block = NULL;
         if (EFI_ERROR(handle.fn(handles[i], &block_guid, (void **)&block)) ||
             !block || !block->media) continue;
         const efi_block_media_t *m = block->media;
-        if (!m->media_present || m->logical_partition) continue;
+        if (!m->media_present) continue;
         if (m->block_size < 512u || (m->block_size & (m->block_size - 1u)) != 0u) continue;
 
-        disks[disk_count++] = block;
-        if (m->removable) {
-            if (!source_block) source_block = block;
-        } else {
-            if (!target_block) target_block = block;
+        if (boot_dev_handle && (handles[i] == boot_dev_handle ||
+            (boot_bio && boot_bio->media && m->media_id == boot_bio->media->media_id))) {
+            if (!m->logical_partition || !source_block) {
+                source_block = block;
+            }
         }
+
+        if (m->logical_partition) continue;
+
+        disks[disk_count++] = block;
     }
     (void)release.fn(handles);
 
-    /* If USB flash drive reports fixed disk (removable == 0), differentiate via disk count */
+    /* If source_block was a partition, find parent disk in disks[] */
+    if (source_block && source_block->media->logical_partition) {
+        for (size_t i = 0; i < disk_count; ++i) {
+            if (disks[i]->media->media_id == source_block->media->media_id) {
+                source_block = disks[i];
+                break;
+            }
+        }
+    }
+
+    /* Fallback: if source_block not resolved via loaded_image, probe for existing EFI image */
     if (!source_block && disk_count >= 2) {
-        target_block = disks[0];
-        source_block = disks[1];
-    } else if (!target_block && disk_count >= 2) {
-        if (source_block == disks[0]) target_block = disks[1];
-        else target_block = disks[0];
+        for (size_t i = 0; i < disk_count; ++i) {
+            if (disks[i]->read_blocks &&
+                disks[i]->read_blocks(disks[i], disks[i]->media->media_id, 4164u, 512u, g_install_buffer) == EFI_SUCCESS) {
+                if (g_install_buffer[0] == 'M' && g_install_buffer[1] == 'Z') {
+                    source_block = disks[i];
+                    break;
+                }
+            }
+        }
+    }
+
+    /* Target is any non-read-only disk that is NOT source_block (prefer fixed disk) */
+    for (size_t i = 0; i < disk_count; ++i) {
+        if (disks[i] == source_block || disks[i]->media->read_only) continue;
+        if (!target_block || (!disks[i]->media->removable && target_block->media->removable)) {
+            target_block = disks[i];
+        }
     }
 
     const uint32_t w = c->w, h = c->h;
@@ -362,8 +418,9 @@ static int run_firmware_installer(const canvas_t *c, efi_boot_services_t *bs,
                 g_install_buffer[b] = (b < to_write) ? intellect_installed_efi_start[written + b] : 0u;
             }
             uint64_t write_lba = esp_boot_lba + (written / 512u);
-            (void)target_block->write_blocks(target_block, target_block->media->media_id,
-                                             write_lba, sizeof(g_install_buffer), g_install_buffer);
+            efi_status_t ewrc = target_block->write_blocks(target_block, target_block->media->media_id,
+                                                           write_lba, sizeof(g_install_buffer), g_install_buffer);
+            if (EFI_ERROR(ewrc)) { write_error = 3; break; }
             written += to_write;
         }
     }
@@ -372,10 +429,26 @@ static int run_firmware_installer(const canvas_t *c, efi_boot_services_t *bs,
         (void)target_block->flush_blocks(target_block);
     }
 
+    /* 4. Independent readback verification */
+    if (!write_error && target_block->read_blocks) {
+        efi_status_t vrc = target_block->read_blocks(target_block, target_block->media->media_id,
+                                                     4164u, 512u, g_install_buffer);
+        if (EFI_ERROR(vrc) || g_install_buffer[0] != 'M' || g_install_buffer[1] != 'Z') {
+            write_error = 4;
+        } else {
+            for (size_t k = 0; k < 512u && k < installed_bytes; ++k) {
+                if (g_install_buffer[k] != intellect_installed_efi_start[k]) {
+                    write_error = 5;
+                    break;
+                }
+            }
+        }
+    }
+
     if (write_error) {
         box(c, left, card_y + 330u, cardw, 60u, 0x221318u);
         box(c, left, card_y + 330u, 4u, 60u, 0xff5555u);
-        line(c, left + 20u, card_y + 342u, "ERROR: FAILED TO WRITE TO TARGET DISK (EFI WRITE ERROR)", 55u, 1u, 0xff7b72u);
+        line(c, left + 20u, card_y + 342u, "ERROR: FAILED TO WRITE/VERIFY TARGET DISK", 41u, 1u, 0xff7b72u);
         line(c, left + 20u, card_y + 364u, "Installation aborted. Press ENTER to return to menu.", 53u, 1u, 0xffd1b3u);
         while (1) {
             intellect_efi_key_t key = {0, 0};
@@ -391,7 +464,7 @@ static int run_firmware_installer(const canvas_t *c, efi_boot_services_t *bs,
     box(c, left, card_y + 330u, 4u, 60u, 0x00e5a3u);
 
     line(c, left + 20u, card_y + 342u, "SUCCESS: INTELLECT OS HAS BEEN FULLY INSTALLED TO DISK!", 56u, 1u, 0xf0f6fcu);
-    line(c, left + 20u, card_y + 364u, "Remove the USB flash drive and press ENTER to restart.", 69u, 1u, 0x5eead4u);
+    line(c, left + 20u, card_y + 364u, "PLEASE REMOVE THE USB FLASH DRIVE AND PRESS ENTER TO RESTART.", 61u, 1u, 0x5eead4u);
 
     while (1) {
         intellect_efi_key_t key = {0, 0};

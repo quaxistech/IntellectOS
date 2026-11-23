@@ -109,8 +109,8 @@ int intellect_terminalfb64_init(const intellect_bootinfo_t *b) {
     accent_color = 0x00e5a3u; /* Modern electric emerald cyan */
     bar_color    = 0x111c2cu; /* Top / bottom navigation bars */
 
-    /* Resolution adaptation: Scale font for HiDPI / 4K; 1x for standard */
-    scale = (width >= 1920u && height >= 1080u) ? 2u : 1u;
+    /* Resolution adaptation: Scale font for HD / Full HD / 4K; 1x for small displays */
+    scale = (width >= 1200u && height >= 700u) ? 2u : 1u;
     cell_w = 8u * scale + (scale > 1u ? 2u : 1u);
     cell_h = 16u * scale + (scale > 1u ? 2u : 2u);
 

@@ -108,7 +108,7 @@ S0_OBJS := $(BUILD)/kernel64/ata_pio64.o $(BUILD)/kernel64/block64.o $(BUILD)/ke
 WELCOME64_OBJS := $(BUILD)/kernel64/welcome64.o
 I2_OBJS := $(BUILD)/kernel64/fat32_vfs64.o
 IFS1_OBJS := $(BUILD)/kernel64/ifs_ro64.o $(BUILD)/kernel64/ifs_blake3_v1.o $(BUILD)/kernel64/ifs_exec64.o
-U1_OBJS := $(addprefix $(BUILD)/kernel64/,$(addsuffix .o,userterminal64 userpolicy64 terminalfb64 input64)) $(BUILD)/kernel64/usergate64.o $(BUILD)/kernel64/user_terminal_embed.o
+U1_OBJS := $(addprefix $(BUILD)/kernel64/,$(addsuffix .o,userterminal64 userpolicy64 terminalfb64 input64 xhci64)) $(BUILD)/kernel64/usergate64.o $(BUILD)/kernel64/user_terminal_embed.o
 $(BUILD)/kernel64/%.o: kernel/src64/%.c kernel/include/bootinfo.h kernel/include/pmm64.h kernel/include/memcore64.h kernel/include/kheap64.h kernel/include/vmm64.h | $(BUILD)/kernel64
 	$(K64_CC) $(K64_FLAGS) -c $< -o $@
 $(BUILD)/kernel64/exceptions_asm.o: kernel/x86_64/exceptions64.S | $(BUILD)/kernel64

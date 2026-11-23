@@ -98,8 +98,39 @@ static void detect_video(const efi_system_table_t *st,intellect_bootinfo_t *out)
     if(bs==NULL || bs->locate_protocol==NULL) return;
     efi_gop_t *gop=NULL;
     efi_status_t status=bs->locate_protocol(&guid_gop,NULL,(void **)&gop);
-    if(EFI_ERROR(status) || gop==NULL || gop->mode==NULL || gop->mode->info==NULL ||
-       gop->mode->size_of_info < sizeof(efi_gop_mode_information_t)) return;
+    if(EFI_ERROR(status) || gop==NULL || gop->mode==NULL) return;
+
+    /* If query_mode and set_mode are available, select the display's best native resolution */
+    typedef efi_status_t (EFIAPI *gop_query_fn)(efi_gop_t *, uint32_t, size_t *, efi_gop_mode_information_t **);
+    typedef efi_status_t (EFIAPI *gop_set_fn)(efi_gop_t *, uint32_t);
+    gop_query_fn query_fn = (gop_query_fn)gop->query_mode;
+    gop_set_fn set_fn = (gop_set_fn)gop->set_mode;
+
+    if (query_fn && set_fn && gop->mode->max_mode > 0u) {
+        uint32_t best_mode = gop->mode->mode;
+        uint64_t best_pixels = 0;
+        if (gop->mode->info) {
+            best_pixels = (uint64_t)gop->mode->info->horizontal_resolution * gop->mode->info->vertical_resolution;
+        }
+        for (uint32_t m = 0; m < gop->mode->max_mode; ++m) {
+            size_t info_size = 0;
+            efi_gop_mode_information_t *minfo = NULL;
+            if (query_fn(gop, m, &info_size, &minfo) == EFI_SUCCESS && minfo != NULL) {
+                if (minfo->pixel_format <= 1u && minfo->horizontal_resolution <= 3840u && minfo->vertical_resolution <= 2160u) {
+                    uint64_t px = (uint64_t)minfo->horizontal_resolution * minfo->vertical_resolution;
+                    if (px > best_pixels) {
+                        best_pixels = px;
+                        best_mode = m;
+                    }
+                }
+            }
+        }
+        if (best_mode != gop->mode->mode) {
+            (void)set_fn(gop, best_mode);
+        }
+    }
+
+    if(gop->mode->info==NULL || gop->mode->size_of_info < sizeof(efi_gop_mode_information_t)) return;
     const efi_gop_mode_information_t *info=gop->mode->info;
     const efi_gop_mode_t *mode=gop->mode;
     if(info->horizontal_resolution==0u || info->vertical_resolution==0u ||

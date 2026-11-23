@@ -20,9 +20,12 @@ static int prefix(const char *s,const char *p){
 }
 int main(void){
     char line[96];
-    puts0("\nINTELLECT OS U1 - USER MODE TERMINAL\n");
-    puts0("CPL3 / INT80 ABI / PS2 OR COM1 INPUT\n");
-    puts0("type help. This is a bootstrap shell, not root login.\n\n");
+    puts0("\n=======================================================\n");
+    puts0("  INTELLECT OS - NATIVE TERMINAL EDITION v1.0\n");
+    puts0("  Autonomous x86-64 Operating System & Hardware Platform\n");
+    puts0("  Ring 3 User Mode | Verified IntellectFS v1 System Root\n");
+    puts0("  Type 'help' for command list | Native USB & PS/2 Active\n");
+    puts0("=======================================================\n\n");
     for(;;){
         puts0("intellect:/$ ");
         unsigned n=0;

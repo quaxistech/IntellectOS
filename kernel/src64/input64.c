@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include "serial64.h"
 #include "input64.h"
+#include "hardware64.h"
+#include "xhci64.h"
 
 static unsigned shift_pressed;
 static unsigned extended;
@@ -60,6 +62,9 @@ static void i8042_flush(void) {
 
 void intellect_input64_init(void) {
     input_initialized = 1;
+#ifndef INTELLECT_INPUT64_HOST_TEST
+    (void)intellect_xhci64_init(intellect_hw64_snapshot());
+#endif
     uint8_t status = inb(0x64u);
     if (status == 0xFFu) {
         /* Floating bus: pure UEFI or no i8042 controller */
@@ -92,13 +97,12 @@ void intellect_input64_init(void) {
     }
 
     /* 5. Update configuration:
-     * Disable interrupts (Bit 0 and Bit 1 = 0) since we run in polling mode without IRQ handlers.
      * Enable clocks (clear Bit 4 and Bit 5).
+     * Keep IRQ1 enabled (Bit 0) for BIOS SMM legacy USB emulation.
      * Enable translation (Bit 6 = 1) if supported.
      */
-    cfg &= ~((1u << 0) | (1u << 1));
+    cfg |= (1u << 0) | (1u << 6);
     cfg &= ~((1u << 4) | (1u << 5));
-    cfg |= (1u << 6);
 
     if (i8042_wait_write()) {
         outb(0x64u, 0x60u);
@@ -179,6 +183,11 @@ int intellect_input64_poll_char(void) {
     }
     const int serial = intellect_serial64_getc_nonblocking();
     if (serial >= 0) return serial == '\r' ? '\n' : serial;
+
+#ifndef INTELLECT_INPUT64_HOST_TEST
+    const int usb_char = intellect_xhci64_poll_char();
+    if (usb_char >= 0) return usb_char;
+#endif
 
     const uint8_t status = inb(0x64u);
     if (status == 0xFFu || !(status & 0x01u)) return -1;
