@@ -1,0 +1,172 @@
+{
+  "purpose": "Original docs preserved byte-for-byte, prior to 2026-11-23 canonical rewrite",
+  "count": 33,
+  "files": {
+    "00_README_ARCHITECTURE_MAP.md": {
+      "new_path": "research/00_README_ARCHITECTURE_MAP.md",
+      "bytes": 5677,
+      "sha256": "ae619e4a44d17a787b7a3e8b3436434a2d81d026680d2b9c292ffae050eca774"
+    },
+    "01_INTELLECTOS_SYSTEM_ARCHITECTURE.md": {
+      "new_path": "research/01_INTELLECTOS_SYSTEM_ARCHITECTURE.md",
+      "bytes": 22579,
+      "sha256": "dcc3ae3ae96d0ea9dcb1cbe51a27ed0d2ff51802f89b4dfc1e41ed5f16aa626e"
+    },
+    "02_INTELLECTOS_INTELLIGENCE_LAYER.md": {
+      "new_path": "research/02_INTELLECTOS_INTELLIGENCE_LAYER.md",
+      "bytes": 14382,
+      "sha256": "56b0404c7e9adf55a97cff08df131c43a71d4064b1a18b3a2c3b0a50605311e1"
+    },
+    "03_VIBELANG_LANGUAGE_SPEC.md": {
+      "new_path": "research/03_VIBELANG_LANGUAGE_SPEC.md",
+      "bytes": 15984,
+      "sha256": "ccd75117e0f828ebbe07f3fe85da37212f72716c6c90f2006a254150fe173202"
+    },
+    "04_AI_COMPILER_ARCHITECTURE.md": {
+      "new_path": "research/04_AI_COMPILER_ARCHITECTURE.md",
+      "bytes": 15231,
+      "sha256": "7e2768ccce9442cc7f7bb357db216da0d937b65e269d1482320cfa255619abc5"
+    },
+    "05_IVX_BINARY_EXECUTABLE_SPEC.md": {
+      "new_path": "specs/05_IVX_BINARY_EXECUTABLE_SPEC.md",
+      "bytes": 101511,
+      "sha256": "aded82eb05fdcb879c742959da682555cfa4a5a6314fff90c4d2d6ff2c5dadf2"
+    },
+    "06_VSG_VBIR_INTERMEDIATE_FORMATS.md": {
+      "new_path": "research/06_VSG_VBIR_INTERMEDIATE_FORMATS.md",
+      "bytes": 15899,
+      "sha256": "3b9fe9a60ffbcad00ce83acb95b5728f00a3709710a55b20269b572e47c1ffeb"
+    },
+    "07_OBJECT_LIBRARY_PACKAGE_DEBUG_FORMATS.md": {
+      "new_path": "research/07_OBJECT_LIBRARY_PACKAGE_DEBUG_FORMATS.md",
+      "bytes": 15880,
+      "sha256": "09a0cddb0769b50cbfca3f7ac79f793a6a7671bb33ad50370e303df583780d13"
+    },
+    "08_RUNTIME_ABI_LOADER_AND_IPC.md": {
+      "new_path": "research/08_RUNTIME_ABI_LOADER_AND_IPC.md",
+      "bytes": 16074,
+      "sha256": "af807732f706f2a9107aed8daa36ec2b88cedcdc2ea070c0d2387becca4be6eb"
+    },
+    "09_SECURITY_SUPPLY_CHAIN_AND_UPDATES.md": {
+      "new_path": "research/09_SECURITY_SUPPLY_CHAIN_AND_UPDATES.md",
+      "bytes": 16377,
+      "sha256": "81977b523967a8af8ad3eaf8460f9163c9986394c4eac647a2e6028487f69215"
+    },
+    "10_IMPLEMENTATION_PLAN.md": {
+      "new_path": "research/10_IMPLEMENTATION_PLAN.md",
+      "bytes": 16723,
+      "sha256": "a392d0a52a4d112a85a68f0f50de37159c0b9102b8fe3a7cd36154ab10ec1df9"
+    },
+    "11_TESTING_CONFORMANCE_AND_BENCHMARKS.md": {
+      "new_path": "research/11_TESTING_CONFORMANCE_AND_BENCHMARKS.md",
+      "bytes": 16375,
+      "sha256": "c2b058786ddbfc8cb991376dfd4b7a8044f1079ba8c88bb749231ce4ec5905b5"
+    },
+    "ARCHITECTURE.md": {
+      "new_path": "history/ARCHITECTURE.md",
+      "bytes": 4221,
+      "sha256": "36a073ac2658a3aced2ad1b91db308432038bdafa1a5c3db9f70188cfe7ea1ca"
+    },
+    "BOOTINFO_V1.md": {
+      "new_path": "history/BOOTINFO_V1.md",
+      "bytes": 6614,
+      "sha256": "faf74853c31c204da4b47476d0854626d31a8195fe0c6dd7f7744e8fe0cbefda"
+    },
+    "BOOT_MENU_B1.md": {
+      "new_path": "history/BOOT_MENU_B1.md",
+      "bytes": 3273,
+      "sha256": "ce445d3693fe6c1f8719cfce9e0556c90b127e83c8ee481d492b6bd19250266d"
+    },
+    "CONSOLE_C1.md": {
+      "new_path": "history/CONSOLE_C1.md",
+      "bytes": 5975,
+      "sha256": "94f63340f2682773db2d180e1456b5684087a04193015a2987f72494cbe76830"
+    },
+    "CONSOLE_FIRST_ROADMAP.md": {
+      "new_path": "history/CONSOLE_FIRST_ROADMAP.md",
+      "bytes": 8534,
+      "sha256": "b8e249b640ebc922315d1b85fc706daec029bd975960f83289b4ca3d93b84ef8"
+    },
+    "HARDWARE_H1_H2.md": {
+      "new_path": "history/HARDWARE_H1_H2.md",
+      "bytes": 8257,
+      "sha256": "b460eaeb9a383aa53142e1c3755baeeb608c974dfa4a3b84926fe01edc2cb66d"
+    },
+    "HARDWARE_TEST.md": {
+      "new_path": "history/HARDWARE_TEST.md",
+      "bytes": 2491,
+      "sha256": "8edb36c178a1fe77082d75c8faf944324b4f9d3b7f7234a9c43f99cd96dcd1ae"
+    },
+    "INSTALLATION_FOUNDATION_I2.md": {
+      "new_path": "history/INSTALLATION_FOUNDATION_I2.md",
+      "bytes": 11538,
+      "sha256": "2970613312013cd992326aeb82f585e56c25e6c4973f21cb3054ea70eec16f27"
+    },
+    "IntellectFS_v1_FULL_ARCHITECTURE_AND_DISK_FORMAT.md": {
+      "new_path": "specs/IntellectFS_v1_FULL_ARCHITECTURE_AND_DISK_FORMAT.md",
+      "bytes": 162692,
+      "sha256": "8bad93c6e23f706a667b08bcca96b141b1f6b361de8ecd876952549070645474"
+    },
+    "LIVE_USB_L1.md": {
+      "new_path": "history/LIVE_USB_L1.md",
+      "bytes": 3846,
+      "sha256": "c7a4c01a087582fa6e6cd09dde47a7ef2a4d25928c154232a25f22ce2016e4de"
+    },
+    "MEMORY_CORE_FOUNDATION.md": {
+      "new_path": "history/MEMORY_CORE_FOUNDATION.md",
+      "bytes": 4265,
+      "sha256": "601f08f737ec26d067260359e728f6cb80c7bf1b2a681030c8f843393575ffc8"
+    },
+    "MEMORY_CORE_M1.md": {
+      "new_path": "history/MEMORY_CORE_M1.md",
+      "bytes": 3526,
+      "sha256": "725f4f17ead024b4c96e0ece243396e2f11ad035ba6b278b4466c0667ddfc1ae"
+    },
+    "MEMORY_CORE_M1_VERIFICATION.md": {
+      "new_path": "history/MEMORY_CORE_M1_VERIFICATION.md",
+      "bytes": 1145,
+      "sha256": "fa5bb1a67a76c176dcc63c78ba795ae5a1ff8b2a53083ceab8261038d9117782"
+    },
+    "MEMORY_CORE_M2.md": {
+      "new_path": "history/MEMORY_CORE_M2.md",
+      "bytes": 4257,
+      "sha256": "ecc60f1bf3151d854e647c45a2ae88029030246b834a70fd85c127a631152293"
+    },
+    "MEMORY_CORE_M3A.md": {
+      "new_path": "history/MEMORY_CORE_M3A.md",
+      "bytes": 5358,
+      "sha256": "62ed1f983a18e267fc3c654b57d79f96989ff04c1772ce49595dcdb6e0697bcc"
+    },
+    "MILESTONES.md": {
+      "new_path": "history/MILESTONES.md",
+      "bytes": 3179,
+      "sha256": "f616ed92b4a54f4c941991a6f077e2f87024267705ce57a7e7010913a5fe50b5"
+    },
+    "RELEASE_BASELINE.md": {
+      "new_path": "history/RELEASE_BASELINE.md",
+      "bytes": 1126,
+      "sha256": "f9813748e2228114cd7be1a394ff6a2be76c2bd5444b367afd01144d0a9d9ba9"
+    },
+    "ROADMAP.md": {
+      "new_path": "history/ROADMAP.md",
+      "bytes": 2419,
+      "sha256": "03d699de248d0c456be4d2bad0892e288479bab4890c5f00ee3d762449693b4b"
+    },
+    "STORAGE_S0_READONLY.md": {
+      "new_path": "history/STORAGE_S0_READONLY.md",
+      "bytes": 8258,
+      "sha256": "a5fcf530d8af037b739af6b24ea921d2865a7647e0fa468db6d5acc54eb08b6e"
+    },
+    "UEFI_STAGE_E.md": {
+      "new_path": "history/UEFI_STAGE_E.md",
+      "bytes": 3604,
+      "sha256": "0098f6738d26241608241ee7b6dae0c0b03c7c654f2de73e058716a71f7dabd7"
+    },
+    "USER_TERMINAL_U1.md": {
+      "new_path": "history/USER_TERMINAL_U1.md",
+      "bytes": 7710,
+      "sha256": "670c8dd1c5229c85c6802757ccffd7f80666142578700a52a49022a719b36296"
+    }
+  },
+  "original_sha256_manifest": "dfa4c68130df67185554deaad61302f96ef46d9aa6dc0dc41f2689b521fef840"
+}
